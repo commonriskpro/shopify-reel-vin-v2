@@ -201,7 +201,10 @@ export async function createProductFull(admin, options) {
     status,
     productType: productType?.trim() || "Vehicles",
   };
-  if (descriptionHtml != null && descriptionHtml !== "") productInput.descriptionHtml = descriptionHtml;
+  // Cap description to avoid oversized GraphQL variables and "syntax error, unexpected end of file"
+  if (descriptionHtml != null && descriptionHtml !== "") {
+    productInput.descriptionHtml = String(descriptionHtml).slice(0, 500_000);
+  }
   if (vendor?.trim()) productInput.vendor = vendor.trim();
   if (Array.isArray(tags) && tags.length) productInput.tags = tags.filter(Boolean).map((t) => String(t).trim());
   if (categoryId?.trim()) productInput.category = categoryId.trim();

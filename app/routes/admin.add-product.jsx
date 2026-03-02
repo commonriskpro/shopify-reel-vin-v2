@@ -67,11 +67,28 @@ export const action = async ({ request }) => {
     if (err instanceof Response) return err;
     return Response.json({ error: "Authentication required" }, { status: 401 });
   }
+  // Reject oversized bodies so the request is not truncated (avoids Shopify "syntax error, unexpected end of file")
+  const MAX_BODY_BYTES = 2 * 1024 * 1024; // 2MB
+  const contentLength = request.headers.get("content-length");
+  if (contentLength != null) {
+    const len = parseInt(contentLength, 10);
+    if (!Number.isNaN(len) && len > MAX_BODY_BYTES) {
+      return Response.json(
+        { error: "Request too large. Shorten the description or remove extra media and try again." },
+        { status: 413 }
+      );
+    }
+  }
   let rawBody;
   try {
     rawBody = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid body" }, { status: 400 });
+  } catch (e) {
+    const msg = e?.message ?? "";
+    const truncated = /unexpected end of json input|syntax error|unexpected end of file/i.test(msg);
+    return Response.json(
+      { error: truncated ? "Request body was truncated or invalid. Try shortening the description and save again." : "Invalid request body." },
+      { status: 400 }
+    );
   }
   const bodyParse = actionBodySchema.safeParse(rawBody);
   if (!bodyParse.success) {
@@ -143,10 +160,17 @@ export const action = async ({ request }) => {
     ? submitMedia.filter((m) => m && m.originalSource && m.mediaContentType)
     : [];
 
+  // Cap description size to avoid oversized GraphQL variables and "syntax error, unexpected end of file"
+  const MAX_DESCRIPTION_CHARS = 500_000;
+  const safeDescription =
+    descriptionHtml != null
+      ? String(descriptionHtml).slice(0, MAX_DESCRIPTION_CHARS)
+      : undefined;
+
   try {
     const result = await createProductFull(admin, {
       title: String(title).trim(),
-      descriptionHtml: descriptionHtml != null ? String(descriptionHtml) : undefined,
+      descriptionHtml: safeDescription,
       vendor: vendor?.trim(),
       productType: productType?.trim() || "Vehicles",
       tags: tags.length ? tags : undefined,
@@ -173,8 +197,13 @@ export const action = async ({ request }) => {
     });
   } catch (err) {
     logServerError("admin.add-product.action", err, { shop: session?.shop });
+    const msg = err?.message ?? "";
+    const userMessage =
+      /syntax error|unexpected end of file|unexpected end of json/i.test(msg)
+        ? "Product data may be too large or was truncated. Try shortening the description and save again."
+        : (msg || "Could not create product.");
     return Response.json(
-      { error: err?.message || "Could not create product." },
+      { error: userMessage },
       { status: 502 }
     );
   }
