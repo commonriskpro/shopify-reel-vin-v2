@@ -57,7 +57,16 @@ const actionBodySchema = z.object({
 
 export const action = async ({ request }) => {
   if (request.method !== "POST") return null;
-  const { admin, session } = await authenticate.admin(request);
+  // authenticate.admin() throws a Response redirect when the session is missing
+  // or expired. Re-throwing it lets React Router handle the redirect properly
+  // rather than collapsing it into a 500 on .data fetch requests.
+  let admin, session;
+  try {
+    ({ admin, session } = await authenticate.admin(request));
+  } catch (err) {
+    if (err instanceof Response) return err;
+    return Response.json({ error: "Authentication required" }, { status: 401 });
+  }
   let rawBody;
   try {
     rawBody = await request.json();

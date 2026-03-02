@@ -20,7 +20,7 @@ export async function listFiles(admin, { first, after }) {
     query: `#graphql
     query shopFiles($first: Int!, $after: String) {
       files(first: $first, after: $after) {
-        edges { cursor node { id alt ... on MediaImage { image { url } mediaContentType } ... on Video { sources { url } previewImage { url } mediaContentType } ... on GenericFile { url mimeType } } }
+        edges { cursor node { id alt ... on MediaImage { image { url } mediaContentType } ... on Video { sources { url } preview { image { url } } mediaContentType } ... on GenericFile { url mimeType } } }
         pageInfo { hasNextPage endCursor }
       }
     }`,
@@ -38,14 +38,14 @@ export async function listFiles(admin, { first, after }) {
       } else if (node?.sources?.[0]?.url) {
         url = node.sources[0].url;
         type = "VIDEO";
-      } else if (node?.previewImage?.url) {
-        url = node.previewImage.url;
+      } else if (node?.preview?.image?.url) {
+        url = node.preview.image.url;
         type = "VIDEO";
       } else if (node?.url) {
         url = node.url;
         type = (node?.mimeType || "").startsWith("video/") ? "VIDEO" : "IMAGE";
       }
-      const previewUrl = node?.image?.url || node?.previewImage?.url || node?.sources?.[0]?.url || node?.url;
+      const previewUrl = node?.image?.url || node?.preview?.image?.url || node?.sources?.[0]?.url || node?.url;
       if (!url) return null;
       return {
         id: node?.id,

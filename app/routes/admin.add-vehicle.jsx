@@ -27,7 +27,13 @@ const actionBodySchema = z.object({
 
 export const action = async ({ request }) => {
   if (request.method !== "POST") return null;
-  const { admin, session } = await authenticate.admin(request);
+  let admin, session;
+  try {
+    ({ admin, session } = await authenticate.admin(request));
+  } catch (err) {
+    if (err instanceof Response) return err;
+    return Response.json({ error: "Authentication required" }, { status: 401 });
+  }
   let rawBody;
   try {
     rawBody = await request.json();
