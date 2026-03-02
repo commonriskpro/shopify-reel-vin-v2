@@ -37,9 +37,11 @@ export const action = async ({ request }) => {
 // Status badge helper
 function StatusBadge({ status }) {
   const map = {
-    created: { label: "Created", color: "#008060", bg: "#f4faf6", border: "#b3e0c6" },
-    exists:  { label: "Already exists", color: "#6d7175", bg: "#f6f6f7", border: "#e3e3e3" },
-    error:   { label: "Error", color: "#b04545", bg: "#fff8f8", border: "#fbb" },
+    created: { label: "Created",      color: "#008060", bg: "#f4faf6", border: "#b3e0c6" },
+    updated: { label: "Updated",      color: "#2c6ecb", bg: "#f0f5ff", border: "#b9d4f7" },
+    ok:      { label: "Already set",  color: "#6d7175", bg: "#f6f6f7", border: "#e3e3e3" },
+    exists:  { label: "Already set",  color: "#6d7175", bg: "#f6f6f7", border: "#e3e3e3" },
+    error:   { label: "Error",        color: "#b04545", bg: "#fff8f8", border: "#fbb"    },
   };
   const s = map[status] || map.error;
   return (

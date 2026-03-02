@@ -1,14 +1,10 @@
 /**
- * Creates Shopify product metafield definitions for vehicle inventory filters.
+ * Creates (or updates) Shopify product metafield definitions for vehicle inventory filters.
  *
- * Why this is needed:
- *   Products created by the VIN decoder already store fields like year, make, model, etc.
- *   as metafields under the "vin_decoder" namespace. But Shopify's Search & Discovery app
- *   only surfaces metafields as collection filter options when a *definition* exists with
- *   storefront: "PUBLIC_READ" access. This service creates those definitions in one pass.
- *
- * After running, go to Shopify Admin → Apps → Search & Discovery → Filters → Add filter
- * and enable each vehicle filter. The collection page will then show the filter sidebar.
+ * Runs create-or-update (upsert):
+ *   - First queries existing definitions under vin_decoder namespace.
+ *   - Creates any that are missing.
+ *   - Updates name/description on any that already exist but have a stale name.
  */
 
 export const VEHICLE_METAFIELD_DEFINITIONS = [
@@ -16,21 +12,21 @@ export const VEHICLE_METAFIELD_DEFINITIONS = [
     namespace: "vin_decoder",
     key: "year",
     name: "Year",
-    description: "Vehicle model year (e.g. 2021)",
+    description: "Model year (e.g. 2021)",
     type: "single_line_text_field",
   },
   {
     namespace: "vin_decoder",
     key: "make",
     name: "Make",
-    description: "Vehicle make / brand (e.g. Toyota)",
+    description: "Brand / manufacturer (e.g. Toyota)",
     type: "single_line_text_field",
   },
   {
     namespace: "vin_decoder",
     key: "model",
     name: "Model",
-    description: "Vehicle model (e.g. Camry)",
+    description: "Model name (e.g. Camry)",
     type: "single_line_text_field",
   },
   {
@@ -64,8 +60,8 @@ export const VEHICLE_METAFIELD_DEFINITIONS = [
   {
     namespace: "vin_decoder",
     key: "title_status",
-    name: "Title Brand",
-    description: "Vehicle title status (Clean, Salvage, Rebuilt, Junk, Flood)",
+    name: "Brand",
+    description: "Title brand / status (Clean, Salvage, Rebuilt, Junk, Flood)",
     type: "single_line_text_field",
   },
   {
@@ -77,86 +73,131 @@ export const VEHICLE_METAFIELD_DEFINITIONS = [
   },
 ];
 
-const CREATE_DEFINITION_MUTATION = `#graphql
+const CREATE_MUTATION = `#graphql
   mutation metafieldDefinitionCreate($definition: MetafieldDefinitionInput!) {
     metafieldDefinitionCreate(definition: $definition) {
-      createdDefinition {
-        id
-        name
-        namespace
-        key
-        type { name }
-      }
-      userErrors {
-        field
-        message
-        code
-      }
+      createdDefinition { id name namespace key }
+      userErrors { field message code }
+    }
+  }
+`;
+
+const UPDATE_MUTATION = `#graphql
+  mutation metafieldDefinitionUpdate($definition: MetafieldDefinitionUpdateInput!) {
+    metafieldDefinitionUpdate(definition: $definition) {
+      updatedDefinition { id name namespace key }
+      userErrors { field message code }
+    }
+  }
+`;
+
+const LIST_QUERY = `#graphql
+  query listVinDecoderDefinitions {
+    metafieldDefinitions(namespace: "vin_decoder", ownerType: PRODUCT, first: 30) {
+      nodes { id key name namespace }
     }
   }
 `;
 
 /**
- * Creates all vehicle metafield definitions.
- * Safe to run multiple times — already-existing definitions are reported but not re-created.
+ * Upserts all vehicle metafield definitions.
+ * Safe to run multiple times — existing definitions are updated (not re-created).
  *
  * @param {object} admin - admin object from authenticate.admin()
- * @returns {Promise<Array<{ key, name, status: 'created'|'exists'|'error', id?, error? }>>}
+ * @returns {Promise<Array<{ key, name, status: 'created'|'updated'|'ok'|'error', id?, error? }>>}
  */
 export async function createVehicleMetafieldDefinitions(admin) {
   const graphql = admin?.graphql;
   if (!graphql) throw new Error("Admin GraphQL required");
+
+  // 1. Fetch existing definitions so we know which to create vs update
+  let existing = {};
+  try {
+    const listRes = await graphql(LIST_QUERY);
+    const { data: listData } = await listRes.json();
+    for (const node of listData?.metafieldDefinitions?.nodes ?? []) {
+      existing[node.key] = node; // { id, key, name, namespace }
+    }
+  } catch (_) {
+    // Non-fatal — fall back to create-only mode
+  }
+
   const results = [];
 
   for (const def of VEHICLE_METAFIELD_DEFINITIONS) {
-    try {
-      const res = await graphql(CREATE_DEFINITION_MUTATION, {
-        variables: {
-          definition: {
-            namespace: def.namespace,
-            key: def.key,
-            name: def.name,
-            description: def.description,
-            type: def.type,
-            ownerType: "PRODUCT",
-            access: {
-              storefront: "PUBLIC_READ",
+    const existingDef = existing[def.key];
+
+    if (existingDef) {
+      // Already exists — update name/description if needed
+      if (existingDef.name === def.name) {
+        results.push({ key: def.key, name: def.name, status: "ok", id: existingDef.id });
+        continue;
+      }
+      try {
+        const res = await graphql(UPDATE_MUTATION, {
+          variables: {
+            definition: {
+              id: existingDef.id,
+              name: def.name,
+              description: def.description,
             },
           },
-        },
-      });
-      const { data } = await res.json();
-
-      const created = data?.metafieldDefinitionCreate?.createdDefinition;
-      const errors = data?.metafieldDefinitionCreate?.userErrors ?? [];
-
-      // "TAKEN" or "already exists" = already set up; treat as success
-      const alreadyExists = errors.some(
-        (e) =>
-          e.code === "TAKEN" ||
-          (e.message || "").toLowerCase().includes("already") ||
-          (e.message || "").toLowerCase().includes("taken")
-      );
-
-      if (created) {
-        results.push({ key: def.key, name: def.name, status: "created", id: created.id });
-      } else if (alreadyExists) {
-        results.push({ key: def.key, name: def.name, status: "exists" });
-      } else {
-        results.push({
-          key: def.key,
-          name: def.name,
-          status: "error",
-          error: errors.map((e) => e.message).join("; ") || "Definition not created (no error details returned)",
         });
+        const { data } = await res.json();
+        const updated = data?.metafieldDefinitionUpdate?.updatedDefinition;
+        const errors = data?.metafieldDefinitionUpdate?.userErrors ?? [];
+        if (updated) {
+          results.push({ key: def.key, name: def.name, status: "updated", id: updated.id });
+        } else {
+          results.push({
+            key: def.key,
+            name: def.name,
+            status: "error",
+            error: errors.map((e) => e.message).join("; ") || "Update failed",
+          });
+        }
+      } catch (err) {
+        results.push({ key: def.key, name: def.name, status: "error", error: err?.message || String(err) });
       }
-    } catch (err) {
-      results.push({
-        key: def.key,
-        name: def.name,
-        status: "error",
-        error: err?.message || err?.errors?.[0]?.message || String(err),
-      });
+    } else {
+      // Doesn't exist — create it
+      try {
+        const res = await graphql(CREATE_MUTATION, {
+          variables: {
+            definition: {
+              namespace: def.namespace,
+              key: def.key,
+              name: def.name,
+              description: def.description,
+              type: def.type,
+              ownerType: "PRODUCT",
+              access: {
+                storefront: "PUBLIC_READ",
+              },
+            },
+          },
+        });
+        const { data } = await res.json();
+        const created = data?.metafieldDefinitionCreate?.createdDefinition;
+        const errors = data?.metafieldDefinitionCreate?.userErrors ?? [];
+        const alreadyExists = errors.some(
+          (e) => e.code === "TAKEN" || (e.message || "").toLowerCase().includes("already")
+        );
+        if (created) {
+          results.push({ key: def.key, name: def.name, status: "created", id: created.id });
+        } else if (alreadyExists) {
+          results.push({ key: def.key, name: def.name, status: "ok" });
+        } else {
+          results.push({
+            key: def.key,
+            name: def.name,
+            status: "error",
+            error: errors.map((e) => e.message).join("; ") || "Unknown error",
+          });
+        }
+      } catch (err) {
+        results.push({ key: def.key, name: def.name, status: "error", error: err?.message || String(err) });
+      }
     }
   }
 
