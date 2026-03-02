@@ -1,5 +1,5 @@
 {
   "framework": "react-router",
-  "buildCommand": "npx prisma generate && npm run build",
+  "buildCommand": "npx prisma generate && node -e \"require('fs').rmSync('node_modules/.vite',{recursive:true,force:true})\" && npm run build",
   "installCommand": "npm install"
 }
