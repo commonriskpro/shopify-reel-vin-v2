@@ -120,7 +120,7 @@ export async function createVehicleMetafieldDefinitions(admin) {
             type: def.type,
             ownerType: "PRODUCT",
             access: {
-              storefront: "PUBLIC_READ_WRITE",
+              storefront: "PUBLIC_READ",
             },
           },
         },
