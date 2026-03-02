@@ -12,7 +12,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import {
   createVehicleMetafieldDefinitions,
-  VEHICLE_METAFIELD_DEFINITIONS,
+  VEHICLE_METAFIELD_DEFINITIONS, // used in loader only (server) — not referenced in component
 } from "../services/metafield-definitions.server.js";
 
 export const loader = async ({ request }) => {
@@ -171,7 +171,7 @@ export default function SetupPage() {
           <br />
           <strong>4.</strong> Select each vehicle field from the list:
           <ul style={{ margin: "6px 0 6px 20px", padding: 0 }}>
-            {(definitions ?? VEHICLE_METAFIELD_DEFINITIONS).map((d) => (
+            {(definitions ?? []).map((d) => (
               <li key={d.key}>
                 <strong>{d.name}</strong>{" "}
                 <code style={{ fontSize: 11, color: "#6d7175" }}>vin_decoder.{d.key}</code>
