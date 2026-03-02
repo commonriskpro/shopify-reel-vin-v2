@@ -461,3 +461,55 @@ export async function createProductFull(admin, options) {
     ...(warnings.length > 0 && { warnings }),
   };
 }
+
+/**
+ * List products (type Vehicles) that have VIN but missing Miles or Title metafield.
+ * Used by Sync metafields page; keeps admin.graphql usage in services (Option A).
+ * @param {import("@shopify/shopify-api").AdminApiContext} admin
+ * @returns {Promise<Array<{ id: string; title: string; legacyResourceId: string; missingMiles: boolean; missingTitle: boolean }>>}
+ */
+export async function listProductsMissingMilesOrTitle(admin) {
+  const graphql = admin?.graphql;
+  if (!graphql) return [];
+  const query = `#graphql
+    query vehiclesWithMetafields($after: String) {
+      products(first: 100, query: "product_type:Vehicles", after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          title
+          metafields(namespace: "vin_decoder", first: 20) { key value }
+        }
+      }
+    }
+  `;
+  const missing = [];
+  let after = null;
+  for (let page = 0; page < 5; page++) {
+    const { data } = await runGraphQL(graphql, { query, variables: after ? { after } : {} });
+    const nodes = data?.products?.nodes ?? [];
+    for (const p of nodes) {
+      const mf = (p.metafields ?? []).reduce((acc, m) => {
+        acc[m.key] = m?.value ?? "";
+        return acc;
+      }, {});
+      const hasVin = (mf.vin ?? "").toString().trim() !== "";
+      const hasMiles = (mf.mileage ?? "").toString().trim() !== "";
+      const hasTitle = (mf.title_status ?? "").toString().trim() !== "";
+      if (hasVin && (!hasMiles || !hasTitle)) {
+        const legacyId = p.id?.replace?.(/^gid:\/\/shopify\/Product\//, "") ?? "";
+        missing.push({
+          id: p.id,
+          title: p.title ?? "Untitled",
+          legacyResourceId: legacyId,
+          missingMiles: !hasMiles,
+          missingTitle: !hasTitle,
+        });
+      }
+    }
+    const endCursor = data?.products?.pageInfo?.endCursor;
+    if (!data?.products?.pageInfo?.hasNextPage || !endCursor) break;
+    after = endCursor;
+  }
+  return missing;
+}

@@ -59,9 +59,10 @@ const actionBodySchema = z.object({
 
 export const action = async ({ request }) => {
   if (request.method !== "POST") return null;
-  // authenticate.admin() throws a Response redirect when the session is missing
-  // or expired. Re-throwing it lets React Router handle the redirect properly
-  // rather than collapsing it into a 500 on .data fetch requests.
+  const ct = request.headers.get("content-type") || "";
+  if (!ct.toLowerCase().includes("application/json")) {
+    return Response.json({ error: "Content-Type must be application/json" }, { status: 415 });
+  }
   let admin, session;
   try {
     ({ admin, session } = await authenticate.admin(request));
@@ -69,7 +70,6 @@ export const action = async ({ request }) => {
     if (err instanceof Response) return err;
     return Response.json({ error: "Authentication required" }, { status: 401 });
   }
-  // Reject oversized bodies so the request is not truncated (avoids Shopify "syntax error, unexpected end of file")
   const MAX_BODY_BYTES = 2 * 1024 * 1024; // 2MB
   const contentLength = request.headers.get("content-length");
   if (contentLength != null) {
@@ -263,7 +263,6 @@ export default function AddProduct() {
   const [barcode, setBarcode] = useState("");
   const [sellWhenOutOfStock, setSellWhenOutOfStock] = useState(false);
   const [chargeTax, setChargeTax] = useState(true);
-  const [publishingChannel, setPublishingChannel] = useState("online_store");
   const [pendingMedia, setPendingMedia] = useState([]);
 
   const isBusy = fetcher.state !== "idle";
@@ -368,7 +367,7 @@ export default function AddProduct() {
     <s-page heading="Add product">
       <div className="add-product-page">
         <div className="add-product-breadcrumb">
-          <Link to="/admin">VIN Decoder</Link>
+          <Link to="/admin">App</Link>
           <span> › Add product</span>
         </div>
 
@@ -482,6 +481,23 @@ export default function AddProduct() {
                 </select>
                 <p className="add-product-hint">Determines tax rates and adds metafields to improve search, filters, and cross-channel sales</p>
               </div>
+            </div>
+
+            {/* Right column – sidebar */}
+            <div>
+              <div className="add-product-card">
+                <label className="add-product-label" htmlFor="add-product-status">Status</label>
+                <select
+                  id="add-product-status"
+                  className="add-product-input"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                >
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
 
               <div className="add-product-card">
                 <label className="add-product-label" htmlFor="add-product-price">Price</label>
@@ -508,85 +524,6 @@ export default function AddProduct() {
                     <label className="add-product-label" htmlFor="add-product-cost" style={{ fontSize: "13px" }}>Cost per item</label>
                     <input id="add-product-cost" type="text" className="add-product-input" value={cost} onChange={(e) => setCost(e.target?.value ?? "")} placeholder="0.00" />
                   </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right column – sidebar */}
-            <div>
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="add-product-vin">VIN decoder</label>
-                <p className="add-product-hint" style={{ marginBottom: "8px" }}>
-                  Enter a VIN and click Decode to auto-fill title, description, vendor, and tags.
-                </p>
-                <div style={{ display: "flex", gap: "8px", alignItems: "flex-start", flexWrap: "wrap" }}>
-                  <input
-                    id="add-product-vin"
-                    type="text"
-                    className="add-product-input"
-                    value={vin}
-                    onChange={(e) => setVin((e.target?.value ?? "").toUpperCase().slice(0, VIN_LENGTH))}
-                    placeholder="e.g. 1HGBH41JXMN109186"
-                    maxLength={VIN_LENGTH}
-                    style={{ flex: "1", minWidth: "140px" }}
-                  />
-                  <s-button
-                    type="button"
-                    variant="secondary"
-                    disabled={vin.trim().length < 8 || decodeBusy}
-                    onClick={handleDecode}
-                    {...(decodeBusy ? { loading: true } : {})}
-                  >
-                    Decode VIN
-                  </s-button>
-                </div>
-                <p className="add-product-hint" style={{ marginTop: "6px" }}>{vin.length}/{VIN_LENGTH} characters</p>
-                {decodeError && (
-                  <s-banner tone="critical" style={{ marginTop: "8px" }}>{decodeError}</s-banner>
-                )}
-              </div>
-
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="add-product-status">Status</label>
-                <select
-                  id="add-product-status"
-                  className="add-product-input"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                >
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="add-product-card">
-                <div className="add-product-card-heading">
-                  <label className="add-product-label">Publishing</label>
-                  <span className="add-product-card-heading-icon" role="img" aria-label="Settings">⚙</span>
-                </div>
-                <div className="add-product-tabs">
-                  <button
-                    type="button"
-                    className={`add-product-tab ${publishingChannel === "online_store" ? "active" : ""}`}
-                    onClick={() => setPublishingChannel("online_store")}
-                  >
-                    Online Store
-                  </button>
-                  <button
-                    type="button"
-                    className={`add-product-tab ${publishingChannel === "shop" ? "active" : ""}`}
-                    onClick={() => setPublishingChannel("shop")}
-                  >
-                    Shop
-                  </button>
-                  <button
-                    type="button"
-                    className={`add-product-tab ${publishingChannel === "pos" ? "active" : ""}`}
-                    onClick={() => setPublishingChannel("pos")}
-                  >
-                    Point of Sale
-                  </button>
                 </div>
               </div>
 
@@ -621,19 +558,6 @@ export default function AddProduct() {
                   aria-describedby="add-product-mileage-hint"
                 />
                 <p id="add-product-mileage-hint" className="add-product-hint">Odometer reading. Saved to product metafield for filters.</p>
-              </div>
-
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="add-product-template">Theme template</label>
-                <select
-                  id="add-product-template"
-                  className="add-product-input"
-                  value={templateSuffix}
-                  onChange={(e) => setTemplateSuffix(e.target.value)}
-                >
-                  <option value="default-product">Default product</option>
-                  <option value="">(none)</option>
-                </select>
               </div>
             </div>
           </div>

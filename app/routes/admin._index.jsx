@@ -26,6 +26,10 @@ const actionBodySchema = z.object({
 
 export const action = async ({ request }) => {
   if (request.method !== "POST") return null;
+  const ct = request.headers.get("content-type") || "";
+  if (!ct.toLowerCase().includes("application/json")) {
+    return Response.json({ error: "Content-Type must be application/json" }, { status: 415 });
+  }
   let admin, session;
   try {
     ({ admin, session } = await authenticate.admin(request));

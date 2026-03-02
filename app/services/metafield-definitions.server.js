@@ -5,7 +5,10 @@
  *   - First queries existing definitions under vin_decoder namespace.
  *   - Creates any that are missing.
  *   - Updates name/description on any that already exist but have a stale name.
+ *
+ * Never throws: returns results array; on fatal error appends { key: '_fatal', status: 'error', error }.
  */
+import { syncMetafieldsLog, syncMetafieldsError } from "../lib/sync-metafields-debug.server.js";
 
 export const VEHICLE_METAFIELD_DEFINITIONS = [
   {
@@ -119,31 +122,54 @@ const PIN_MUTATION = `#graphql
   }
 `;
 
+/** Safely parse GraphQL response (Response object or already-parsed). */
+async function parseGraphQLRes(res) {
+  if (!res) return null;
+  try {
+    if (typeof res.json === "function") return await res.json();
+    if (typeof res === "object" && ("data" in res || "errors" in res)) return res;
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
 /**
  * Upserts all vehicle metafield definitions.
  * Safe to run multiple times — existing definitions are updated (not re-created).
+ * Never throws.
  *
  * @param {object} admin - admin object from authenticate.admin()
  * @returns {Promise<Array<{ key, name, status: 'created'|'updated'|'ok'|'error', id?, error? }>>}
  */
 export async function createVehicleMetafieldDefinitions(admin) {
   const graphql = admin?.graphql;
-  if (!graphql) throw new Error("Admin GraphQL required");
+  const results = [];
+
+  syncMetafieldsLog("definitions.start", {});
+
+  if (!graphql || typeof graphql !== "function") {
+    syncMetafieldsError("definitions.no_graphql", new Error("Admin GraphQL required"), {});
+    results.push({ key: "_init", name: "Init", status: "error", error: "Admin GraphQL required" });
+    return results;
+  }
 
   // 1. Fetch existing definitions so we know which to create vs update
   let existing = {};
   try {
     const listRes = await graphql(LIST_QUERY);
-    const { data: listData } = await listRes.json();
+    const listJson = await parseGraphQLRes(listRes);
+    const listData = listJson?.data ?? listJson;
     for (const node of listData?.metafieldDefinitions?.nodes ?? []) {
-      existing[node.key] = node; // { id, key, name, namespace }
+      if (node?.key) existing[node.key] = node;
     }
-  } catch (_) {
+    syncMetafieldsLog("definitions.list", { count: Object.keys(existing).length });
+  } catch (e) {
+    syncMetafieldsError("definitions.list", e, {});
     // Non-fatal — fall back to create-only mode
   }
 
-  const results = [];
-
+  try {
   for (const def of VEHICLE_METAFIELD_DEFINITIONS) {
     const existingDef = existing[def.key];
 
@@ -165,7 +191,8 @@ export async function createVehicleMetafieldDefinitions(admin) {
             },
           },
         });
-        const { data } = await res.json();
+        const json = await parseGraphQLRes(res);
+        const data = json?.data ?? json;
         const updated = data?.metafieldDefinitionUpdate?.updatedDefinition;
         const errors = data?.metafieldDefinitionUpdate?.userErrors ?? [];
         if (updated) {
@@ -199,7 +226,8 @@ export async function createVehicleMetafieldDefinitions(admin) {
             },
           },
         });
-        const { data } = await res.json();
+        const json = await parseGraphQLRes(res);
+        const data = json?.data ?? json;
         const created = data?.metafieldDefinitionCreate?.createdDefinition;
         const errors = data?.metafieldDefinitionCreate?.userErrors ?? [];
         const alreadyExists = errors.some(
@@ -231,7 +259,8 @@ export async function createVehicleMetafieldDefinitions(admin) {
           identifier: { ownerType: "PRODUCT", namespace: "vin_decoder", key },
         },
       });
-      const { data } = await res.json();
+      const json = await parseGraphQLRes(res);
+      const data = json?.data ?? json;
       const errs = data?.metafieldDefinitionPin?.userErrors ?? [];
       const nonFatal = errs.every((e) => (e?.message ?? "").toLowerCase().includes("already") || (e?.message ?? "").toLowerCase().includes("pinned"));
       if (errs.length && !nonFatal) {
@@ -240,6 +269,12 @@ export async function createVehicleMetafieldDefinitions(admin) {
     } catch (_) {
       // Non-fatal: definitions exist; pin may fail if already pinned or permissions
     }
+  }
+
+  syncMetafieldsLog("definitions.done", { total: results.length, errors: results.filter((r) => r.status === "error").length });
+  } catch (fatal) {
+    syncMetafieldsError("definitions.fatal", fatal instanceof Error ? fatal : new Error(String(fatal)), {});
+    results.push({ key: "_fatal", name: "Fatal", status: "error", error: fatal?.message || String(fatal) });
   }
 
   return results;

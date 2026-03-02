@@ -14,6 +14,7 @@ import {
   createVehicleMetafieldDefinitions,
   VEHICLE_METAFIELD_DEFINITIONS, // used in loader only (server) — not referenced in component
 } from "../services/metafield-definitions.server.js";
+import { enforceRateLimit } from "../security.server.js";
 
 export const loader = async ({ request }) => {
   await authenticate.admin(request);
@@ -22,12 +23,24 @@ export const loader = async ({ request }) => {
 
 export const action = async ({ request }) => {
   if (request.method !== "POST") return null;
-  let admin;
+  let admin, session;
   try {
-    ({ admin } = await authenticate.admin(request));
+    ({ admin, session } = await authenticate.admin(request));
   } catch (err) {
     if (err instanceof Response) return err;
     return Response.json({ ok: false, error: "Authentication required" }, { status: 401 });
+  }
+  const limited = enforceRateLimit(request, {
+    scope: "admin.setup.create-definitions",
+    limit: 10,
+    windowMs: 60_000,
+    keyParts: [session?.shop || "unknown"],
+  });
+  if (!limited.ok) {
+    return Response.json(
+      { ok: false, error: "Too many requests. Please try again shortly." },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfterSeconds) } }
+    );
   }
   const results = await createVehicleMetafieldDefinitions(admin);
   const allOk = results.every((r) => r.status !== "error");

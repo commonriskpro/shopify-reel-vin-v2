@@ -1,67 +1,79 @@
 /**
  * Sync metafields: run definition sync + pin Title/Miles, list products missing Miles or Title (for older vehicles).
+ * Full hardening: loader never throws; errors returned as data and shown in UI; structured logging for Vercel.
  */
-import { useLoaderData } from "react-router";
+import { useLoaderData, useFetcher } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { createVehicleMetafieldDefinitions } from "../services/metafield-definitions.server.js";
-import { runGraphQL } from "../lib/shopify-graphql.server.js";
+import { listProductsMissingMilesOrTitle } from "../services/products.server.js";
+import { syncMetafieldsLog, syncMetafieldsError } from "../lib/sync-metafields-debug.server.js";
+import { logServerError } from "../http.server.js";
+
+const EMPTY_STATE = {
+  synced: [],
+  missing: [],
+  shop: "",
+  listRequested: false,
+  error: null,
+};
 
 export const loader = async ({ request }) => {
-  const { admin, session } = await authenticate.admin(request);
   const url = new URL(request.url);
   const listMissing = url.searchParams.get("list") === "1";
-  const shop = session?.shop ?? "";
 
-  const synced = await createVehicleMetafieldDefinitions(admin);
+  let admin;
+  let session;
+  try {
+    const auth = await authenticate.admin(request);
+    admin = auth.admin;
+    session = auth.session;
+  } catch (err) {
+    if (err instanceof Response) return err;
+    syncMetafieldsError("loader.authenticate", err, { path: url.pathname });
+    logServerError("admin.sync-metafields.authenticate", err instanceof Error ? err : new Error(String(err)), { path: url.pathname });
+    return { ...EMPTY_STATE, listRequested: listMissing, error: "Authentication failed. Try reopening the app from Shopify Admin or refreshing the page." };
+  }
+
+  const shop = session?.shop ?? null;
+  syncMetafieldsLog("loader.start", { shop: shop ?? "null", listMissing });
+
+  if (!shop) {
+    syncMetafieldsError("loader.shop_null", new Error("Session has no shop"), { path: url.pathname });
+    return { ...EMPTY_STATE, listRequested: listMissing, error: "Store not identified. Open the app again from Shopify Admin (Apps → reel-vin-v2)." };
+  }
+
+  if (!admin?.graphql) {
+    syncMetafieldsError("loader.no_admin", new Error("No admin GraphQL"), { shop });
+    return { ...EMPTY_STATE, shop, listRequested: listMissing, error: "App session incomplete. Refresh the page or reopen from Shopify Admin." };
+  }
+
+  let synced;
+  try {
+    synced = await createVehicleMetafieldDefinitions(admin);
+    syncMetafieldsLog("loader.definitions_done", { shop, count: synced?.length ?? 0, errors: synced?.filter((r) => r.status === "error").length ?? 0 });
+  } catch (err) {
+    syncMetafieldsError("loader.definitions", err, { shop });
+    logServerError("admin.sync-metafields.definitions", err instanceof Error ? err : new Error(String(err)), { shop });
+    return { ...EMPTY_STATE, shop, listRequested: listMissing, error: "Could not sync metafield definitions. See server logs. You can try again or use Filter Setup to create definitions." };
+  }
+
   let missing = [];
-
   if (listMissing) {
-    const graphql = admin.graphql;
-    const query = `#graphql
-      query vehiclesWithMetafields($after: String) {
-        products(first: 100, query: "product_type:Vehicles", after: $after) {
-          pageInfo { hasNextPage endCursor }
-          nodes {
-            id
-            title
-            metafields(namespace: "vin_decoder", first: 20) { key value }
-          }
-        }
-      }
-    `;
-    const collected = [];
-    let after = null;
-    for (let page = 0; page < 5; page++) {
-      const { data } = await runGraphQL(graphql, {
-        query,
-        variables: after ? { after } : {},
-      });
-      const nodes = data?.products?.nodes ?? [];
-      for (const p of nodes) {
-        const mf = (p.metafields ?? []).reduce((acc, m) => {
-          acc[m.key] = m?.value ?? "";
-          return acc;
-        }, {});
-        const hasVin = (mf.vin ?? "").toString().trim() !== "";
-        const hasMiles = (mf.mileage ?? "").toString().trim() !== "";
-        const hasTitle = (mf.title_status ?? "").toString().trim() !== "";
-        if (hasVin && (!hasMiles || !hasTitle)) {
-          const legacyId = p.id?.replace?.("gid://shopify/Product/", "") ?? "";
-          collected.push({
-            id: p.id,
-            title: p.title ?? "Untitled",
-            legacyResourceId: legacyId,
-            missingMiles: !hasMiles,
-            missingTitle: !hasTitle,
-          });
-        }
-      }
-      const endCursor = data?.products?.pageInfo?.endCursor;
-      if (!data?.products?.pageInfo?.hasNextPage || !endCursor) break;
-      after = endCursor;
+    try {
+      missing = await listProductsMissingMilesOrTitle(admin);
+      syncMetafieldsLog("loader.list_done", { shop, missingCount: missing.length });
+    } catch (err) {
+      syncMetafieldsError("loader.list_products", err, { shop });
+      logServerError("admin.sync-metafields.list_products", err instanceof Error ? err : new Error(String(err)), { shop });
+      return {
+        synced: synced.map((r) => ({ key: r.key, name: r.name, status: r.status, error: r.error })),
+        missing: [],
+        shop,
+        listRequested: true,
+        error: "Definitions synced, but listing products failed. Try again or edit products directly in Shopify Admin.",
+      };
     }
-    missing = collected;
   }
 
   return {
@@ -69,6 +81,7 @@ export const loader = async ({ request }) => {
     missing,
     shop,
     listRequested: listMissing,
+    error: null,
   };
 };
 
@@ -82,10 +95,21 @@ function AdminProductLink({ shop, legacyResourceId, children }) {
 }
 
 export default function SyncMetafieldsPage() {
-  const { synced, missing, shop, listRequested } = useLoaderData() ?? {};
+  const loaderData = useLoaderData() ?? {};
+  const fetcher = useFetcher();
+  // When "List products" is clicked we load via fetcher (same session, no full-page nav that triggers auth redirect)
+  const data = fetcher.data ?? loaderData;
+  const { synced, missing, shop, listRequested, error } = data;
 
   return (
     <s-page heading="Sync metafields">
+      {error && (
+        <s-banner tone="critical" style={{ marginBottom: 16 }}>
+          {error}
+          <br />
+          <a href="/admin/sync-metafields" style={{ marginTop: 8, display: "inline-block", color: "#fff", textDecoration: "underline" }}>Try again</a>
+        </s-banner>
+      )}
       <s-section heading="Definitions and product admin">
         <s-paragraph>
           Metafield definitions are synced when you open the app. <strong>Title</strong> and{" "}
@@ -103,12 +127,16 @@ export default function SyncMetafieldsPage() {
           Click below to list vehicles that have a VIN but are missing Miles or Title. Open each
           product in Shopify admin to add the values.
         </s-paragraph>
-        <fetcher.Form method="get" style={{ margin: "12px 0" }}>
-          <input type="hidden" name="list" value="1" />
-          <s-button type="submit" variant="primary">
-            List products missing Miles or Title
-          </s-button>
-        </fetcher.Form>
+        <s-button
+          type="button"
+          variant="primary"
+          disabled={fetcher.state === "loading"}
+          onClick={() => fetcher.load("/admin/sync-metafields?list=1")}
+          {...(fetcher.state === "loading" ? { loading: true } : {})}
+          style={{ margin: "12px 0" }}
+        >
+          {fetcher.state === "loading" ? "Loading…" : "List products missing Miles or Title"}
+        </s-button>
 
         {missing && missing.length > 0 && (
           <div style={{ marginTop: 16, border: "1px solid #e3e3e3", borderRadius: 8, overflow: "hidden" }}>

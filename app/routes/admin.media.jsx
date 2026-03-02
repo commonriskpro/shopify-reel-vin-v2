@@ -188,6 +188,11 @@ export const action = async ({ request }) => {
     return fail("Method not allowed", "METHOD_NOT_ALLOWED", 405, requestId);
   }
 
+  const { requireJsonPost } = await import("../lib/request-guards.server.js");
+  const MAX_MEDIA_BODY_BYTES = 2 * 1024 * 1024; // 2MB
+  const guardResponse = requireJsonPost(request, { maxBytes: MAX_MEDIA_BODY_BYTES, requestId });
+  if (guardResponse) return guardResponse;
+
   let admin;
   try {
     ({ admin } = await resolveAdmin(request, requestId));

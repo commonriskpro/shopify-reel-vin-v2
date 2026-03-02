@@ -14,15 +14,18 @@ async function parseJsonSafe(response) {
   }
 }
 
+/** Keys (and lowercase variants) redacted from logs — no PII/secrets in logs. */
 const SENSITIVE_KEYS = [
   "session", "sessionId", "token", "accessToken", "apiSecret", "password",
-  "authorization", "cookie", "cookies",
+  "authorization", "cookie", "cookies", "bearer", "secret", "apiKey",
+  "x-shopify-hmac-sha256", "x-shopify-webhook-signature", "x-shopify-access-token",
 ];
 function sanitizeExtra(extra) {
   if (!extra || typeof extra !== "object") return extra;
   const out = { ...extra };
-  for (const key of SENSITIVE_KEYS) {
-    if (key in out) out[key] = "[REDACTED]";
+  const lowerKeys = new Set(SENSITIVE_KEYS.map((k) => k.toLowerCase()));
+  for (const key of Object.keys(out)) {
+    if (lowerKeys.has(key.toLowerCase())) out[key] = "[REDACTED]";
   }
   return out;
 }

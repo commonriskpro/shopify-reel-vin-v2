@@ -5,6 +5,7 @@ import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
 import { createVehicleMetafieldDefinitions } from "../services/metafield-definitions.server.js";
 import { logServerError } from "../http.server.js";
+import { syncMetafieldsLog, syncMetafieldsError } from "../lib/sync-metafields-debug.server.js";
 import "../styles/admin-tokens.css";
 import "../styles/admin-theme.css";
 
@@ -25,7 +26,6 @@ export const loader = async ({ request }) => {
     session = auth.session;
   } catch (err) {
     if (err instanceof Response) {
-      // Preserve Shopify auth/bounce responses instead of turning them into 500s.
       return err;
     }
     logServerError("admin.loader.authenticate", err, {
@@ -40,11 +40,18 @@ export const loader = async ({ request }) => {
     });
     throw err;
   }
-  // Sync metafield definitions and pin Title/Miles so they appear in product admin.
+
+  const shop = session?.shop ?? null;
+  if (!shop) {
+    syncMetafieldsLog("admin.layout.shop_null", { path: url.pathname });
+  }
+
+  // Sync metafield definitions and pin Title/Miles (non-blocking; never throws from service).
   try {
     await createVehicleMetafieldDefinitions(admin);
   } catch (err) {
-    logServerError("admin.loader.syncMetafieldDefinitions", err, { shop: session?.shop });
+    syncMetafieldsError("admin.layout.sync", err, { shop });
+    logServerError("admin.loader.syncMetafieldDefinitions", err, { shop });
   }
   const { getValidatedEnv } = await import("../env.server.js");
   return { apiKey: getValidatedEnv().SHOPIFY_API_KEY };
@@ -95,9 +102,7 @@ export default function App() {
         </div>
       )}
       <s-app-nav>
-        <s-link href="/admin">VIN Decoder</s-link>
         <s-link href="/admin/add-product">Add product (full)</s-link>
-        <s-link href="/admin/sync-metafields">Sync metafields</s-link>
         <s-link href="/admin/reels">Shoppable Reels</s-link>
         <s-link href="/admin/setup">Filter Setup</s-link>
       </s-app-nav>
