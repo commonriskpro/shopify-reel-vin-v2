@@ -110,7 +110,7 @@ export async function createVehicleMetafieldDefinitions(admin) {
 
   for (const def of VEHICLE_METAFIELD_DEFINITIONS) {
     try {
-      const { data } = await graphql(CREATE_DEFINITION_MUTATION, {
+      const res = await graphql(CREATE_DEFINITION_MUTATION, {
         variables: {
           definition: {
             namespace: def.namespace,
@@ -126,6 +126,7 @@ export async function createVehicleMetafieldDefinitions(admin) {
           },
         },
       });
+      const { data } = await res.json();
 
       const created = data?.metafieldDefinitionCreate?.createdDefinition;
       const errors = data?.metafieldDefinitionCreate?.userErrors ?? [];
@@ -147,7 +148,7 @@ export async function createVehicleMetafieldDefinitions(admin) {
           key: def.key,
           name: def.name,
           status: "error",
-          error: errors.map((e) => e.message).join("; ") || "Unknown error",
+          error: errors.map((e) => e.message).join("; ") || "Definition not created (no error details returned)",
         });
       }
     } catch (err) {
@@ -155,7 +156,7 @@ export async function createVehicleMetafieldDefinitions(admin) {
         key: def.key,
         name: def.name,
         status: "error",
-        error: err?.message || String(err),
+        error: err?.message || err?.errors?.[0]?.message || String(err),
       });
     }
   }
