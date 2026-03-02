@@ -1,15 +1,18 @@
 /**
- * Unified API client for /api/*. Uses authenticated fetch and enforces JSON envelope.
- * Use for ALL /api calls from the frontend. Returns { ok, data?, error?, meta? }.
+ * Unified API client hook: useApiClient() + formatApiError().
  *
- * WHY THIS FIXES INTERMITTENT 401/502:
- *   Shopify's authenticate.admin() resolves shop identity from EITHER the
- *   Authorization: Bearer <session-token> header OR the ?shop=&host= query
- *   parameters. When the session token is temporarily unavailable (App Bridge
- *   race), having shop/host in the URL gives the server a reliable fallback.
- *   buildApiUrl() copies those params from window.location.search into every
- *   /api/* request automatically, without duplicating them if they are already
- *   present.
+ * SSR SAFETY NOTE — DO NOT RENAME THIS FILE WITH A ".client." INFIX.
+ *   Files named *.client.* are treated as browser-only modules by the
+ *   Vite / React Router build pipeline and are STRIPPED from the server
+ *   bundle. Any server-rendered route that imports from a *.client.* file
+ *   will receive undefined exports, causing "useApiClient is not a function"
+ *   during SSR and a production crash (verified: Vercel TypeError at Index).
+ *
+ *   This file MUST stay importable on the server. All browser-only code
+ *   (window, document, App Bridge) lives exclusively inside callback bodies
+ *   that are only invoked client-side, never at module evaluation time.
+ *
+ * @module useApiClient
  */
 import { useCallback } from "react";
 import { useAuthenticatedFetch } from "../hooks/useAuthenticatedFetch.js";
@@ -22,24 +25,17 @@ const SHOPIFY_CTX_PARAMS = ["shop", "host", "embedded"];
  * Copies Shopify context query params (shop, host, embedded) from the current
  * page URL into the API request URL — only when they are not already present.
  *
- * Handles:
- *   - Paths that already include query strings (e.g. /api/files?first=30)
- *   - Absolute URLs (left untouched — assumed to be external or already correct)
- *   - SSR/non-browser contexts (returns path as-is; server never calls this)
+ * SSR-safe: returns path unchanged when window is not available.
  *
  * @param {string} path - Relative path like "/api/files?first=30" or absolute URL.
- * @returns {string} Fully-qualified URL string with context params appended.
+ * @returns {string}
  */
 function buildApiUrl(path) {
-  // Leave absolute URLs (e.g. external staged-upload targets) unchanged.
   if (path.startsWith("http")) return path;
-
-  // SSR guard — this function only runs client-side.
+  // SSR guard — window is not available during server-side rendering.
   if (typeof window === "undefined") return path;
 
   const url = new URL(path, window.location.origin);
-
-  // Copy each Shopify context param from the current page URL (if not already in path).
   if (window.location.search) {
     const pageParams = new URLSearchParams(window.location.search);
     for (const key of SHOPIFY_CTX_PARAMS) {
@@ -49,24 +45,22 @@ function buildApiUrl(path) {
       }
     }
   }
-
   return url.toString();
 }
 
 /**
  * Parse a Response into the unified envelope.
  * @param {Response} res
- * @returns {Promise<Envelope>}
+ * @returns {Promise<import("./api-envelope.js").Envelope>}
  */
 async function parseApiResponse(res) {
   const contentType = res.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
-  // Prefer x-request-id from response header (set by apiRoute on every response).
   const requestId = res.headers.get("x-request-id") || undefined;
 
   if (!isJson) {
     const text = await res.text().catch(() => "");
-    if (text.trimStart().startsWith("<!") || text.trimStart().startsWith("<")) {
+    if (text.trimStart().startsWith("<")) {
       return {
         ok: false,
         error: {
@@ -94,7 +88,7 @@ async function parseApiResponse(res) {
     };
   }
 
-  if (json && json.ok === false) {
+  if (json?.ok === false) {
     return {
       ok: false,
       error: {
@@ -102,12 +96,11 @@ async function parseApiResponse(res) {
         code: json.error?.code,
         details: json.error?.details,
       },
-      // Prefer requestId from header, fall back to body meta.
       meta: { ...(json.meta ?? {}), ...(requestId ? { requestId } : {}) },
     };
   }
 
-  if (json && json.ok === true) {
+  if (json?.ok === true) {
     return {
       ok: true,
       data: json.data,
@@ -123,13 +116,12 @@ async function parseApiResponse(res) {
 }
 
 /**
- * Hook that returns apiGet and apiPost for all /api/* calls.
- * Both functions:
- *   1. Build the URL with Shopify context params (shop/host/embedded) forwarded.
- *   2. Attach the session token via useAuthenticatedFetch (with retry on failure).
- *   3. Parse and return the unified JSON envelope.
+ * Hook that returns apiGet and apiPost for /api/* calls.
  *
- * @returns {{ apiGet: (url: string) => Promise<Envelope>, apiPost: (url: string, body: unknown) => Promise<Envelope> }}
+ * SSR-safe: useCallback bodies reference window only inside async callbacks
+ * that are never invoked during server rendering.
+ *
+ * @returns {{ apiGet: (url: string) => Promise<object>, apiPost: (url: string, body: unknown) => Promise<object> }}
  */
 export function useApiClient() {
   const authFetch = useAuthenticatedFetch();
@@ -174,7 +166,7 @@ export function useApiClient() {
 }
 
 /**
- * Format API error for display in UI (message + requestId for support).
+ * Format an API error envelope into a human-readable string for UI display.
  * @param {{ ok: false; error?: { message?: string; code?: string }; meta?: { requestId?: string } }} result
  * @returns {string}
  */

@@ -50,7 +50,7 @@ async function getSessionTokenWithRetry() {
  */
 export function useAuthenticatedFetch() {
   return useCallback(async (url, options = {}) => {
-    // Accept pre-built full URLs from api.client.js (which already appends shop/host).
+    // Accept pre-built full URLs from useApiClient.js (which already appends shop/host).
     const fullUrl = url.startsWith("http")
       ? url
       : `${window.location.origin}${url}`;
@@ -63,7 +63,7 @@ export function useAuthenticatedFetch() {
       headers.set("Authorization", `Bearer ${token}`);
     }
     // If still no token, proceed anyway — shop/host query params (added by
-    // buildApiUrl in api.client.js) give the server a second chance to resolve auth,
+    // buildApiUrl in useApiClient.js) give the server a second chance to resolve auth,
     // and if it still fails the server returns a deterministic 401 JSON.
 
     if (options.body != null && !headers.has("Content-Type")) {
