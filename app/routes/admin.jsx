@@ -3,7 +3,7 @@ import { Outlet, useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
-import { ensureVinDecoderMetafieldDefinitions } from "../services/metafields.server.js";
+import { createVehicleMetafieldDefinitions } from "../services/metafield-definitions.server.js";
 import { logServerError } from "../http.server.js";
 import "../styles/admin-tokens.css";
 import "../styles/admin-theme.css";
@@ -40,11 +40,11 @@ export const loader = async ({ request }) => {
     });
     throw err;
   }
-  // Don't block app rendering if metafield bootstrap has transient API issues.
+  // Sync metafield definitions and pin Title/Miles so they appear in product admin.
   try {
-    await ensureVinDecoderMetafieldDefinitions(admin);
+    await createVehicleMetafieldDefinitions(admin);
   } catch (err) {
-    logServerError("admin.loader.ensureMetafields", err, { shop: session?.shop });
+    logServerError("admin.loader.syncMetafieldDefinitions", err, { shop: session?.shop });
   }
   const { getValidatedEnv } = await import("../env.server.js");
   return { apiKey: getValidatedEnv().SHOPIFY_API_KEY };
@@ -97,6 +97,7 @@ export default function App() {
       <s-app-nav>
         <s-link href="/admin">VIN Decoder</s-link>
         <s-link href="/admin/add-product">Add product (full)</s-link>
+        <s-link href="/admin/sync-metafields">Sync metafields</s-link>
         <s-link href="/admin/reels">Shoppable Reels</s-link>
         <s-link href="/admin/setup">Filter Setup</s-link>
       </s-app-nav>

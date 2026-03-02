@@ -7,8 +7,10 @@
 {% assign vin = product.metafields.vin_decoder.vin %}
 {% assign decoded = product.metafields.vin_decoder.decoded.value %}
 {% assign icon_color = section.settings.icon_color | default: '#b22222' %}
+{% assign has_title = product.metafields.vin_decoder.title_status.value | strip %}
+{% assign has_mileage = product.metafields.vin_decoder.mileage.value %}
 
-{% if vin != blank or decoded != nil %}
+{% if vin != blank or decoded != nil or has_title != blank or has_mileage != blank %}
   <div class="vehicle-specs-vin section-{{ section.id }}-padding" {{ section.shopify_attributes }}>
     <div class="vehicle-specs-vin__inner">
       {% if section.settings.heading != blank %}
@@ -20,7 +22,7 @@
           <strong>VIN:</strong> {{ vin }}
         </p>
       {% endif %}
-      {% if decoded != nil %}
+      {% if decoded != nil or has_title != blank or has_mileage != blank %}
         <div class="vehicle-specs-vin__two-col">
           <div class="vehicle-specs-vin__col">
             {% if decoded.year != blank %}
@@ -34,6 +36,14 @@
             {% endif %}
             {% if decoded.trim != blank %}
               <div class="vehicle-specs-vin__row"><span class="vehicle-specs-vin__icon" style="color: {{ icon_color }}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span><span class="vehicle-specs-vin__value">{{ decoded.trim }}</span></div>
+            {% endif %}
+            {% assign title_status_val = product.metafields.vin_decoder.title_status.value %}
+            {% if title_status_val != blank %}
+              <div class="vehicle-specs-vin__row"><span class="vehicle-specs-vin__icon" style="color: {{ icon_color }}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg></span><span class="vehicle-specs-vin__value">Title: {{ title_status_val }}</span></div>
+            {% endif %}
+            {% assign mileage_val = product.metafields.vin_decoder.mileage.value %}
+            {% if mileage_val != blank %}
+              <div class="vehicle-specs-vin__row"><span class="vehicle-specs-vin__icon" style="color: {{ icon_color }}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><span class="vehicle-specs-vin__value">{{ mileage_val | number_with_delimiter }} miles</span></div>
             {% endif %}
             {% comment %} Show one vehicle type only; normalize to standard labels: SUV, SEDAN, COUPE, Pickup, etc. {% endcomment %}
             {% assign vehicle_type_raw = decoded.bodyClass | default: decoded.vehicleType %}

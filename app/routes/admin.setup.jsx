@@ -81,8 +81,10 @@ export default function SetupPage() {
         </s-paragraph>
         <s-paragraph>
           Click the button below to create all{" "}
-          <strong>{definitions?.length ?? 9} definitions</strong> at once. It is safe to run
-          multiple times — already-existing definitions are skipped.
+          <strong>{definitions?.length ?? 10} definitions</strong> at once. <strong>Title</strong> and{" "}
+          <strong>Miles</strong> are pinned so they appear in the Shopify product admin and can be
+          edited on any product. It is safe to run multiple times — already-existing definitions
+          are updated if needed.
         </s-paragraph>
 
         <fetcher.Form method="post" style={{ margin: "16px 0" }}>

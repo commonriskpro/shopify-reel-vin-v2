@@ -31,17 +31,23 @@ async function publishProductToOnlineStore(graphql, productId) {
     });
     const pubNodes = pubData?.publications?.nodes ?? [];
     const onlineStorePub = pubNodes.find((p) => /online store/i.test(p?.name ?? "")) ?? pubNodes[0];
-    if (!onlineStorePub?.id) return null;
-    await runGraphQLWithUserErrors(graphql, {
+    if (!onlineStorePub?.id) return "No Online Store publication found. Add read_publications scope and reinstall.";
+    const { data: pubMutData } = await runGraphQL(graphql, {
       query: `#graphql mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
         publishablePublish(id: $id, input: $input) { publishable { id } userErrors { field message } }
       }`,
       variables: { id: productId, input: [{ publicationId: onlineStorePub.id }] },
-    }, "publishablePublish");
+    });
+    const userErrors = pubMutData?.publishablePublish?.userErrors ?? [];
+    const msg = userErrors.map((e) => e?.message ?? "").join(" ");
+    if (userErrors.length > 0 && !/already published|already active|already included/i.test(msg)) {
+      return "Publish failed: " + msg;
+    }
     return null;
   } catch (err) {
-    if (/already published|already active/i.test(err?.message ?? "")) return null;
-    return "Could not publish to Online Store. Add read_publications,write_publications to app scopes and reinstall.";
+    const m = err?.message ?? "";
+    if (/already published|already active|access denied|unknown field.*publications/i.test(m)) return null;
+    return "Could not publish to Online Store. Add read_publications,write_publications to app scopes and reinstall. " + (m ? m.slice(0, 80) : "");
   }
 }
 

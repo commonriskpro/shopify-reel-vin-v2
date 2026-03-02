@@ -32,8 +32,8 @@ export const VEHICLE_METAFIELD_DEFINITIONS = [
   {
     namespace: "vin_decoder",
     key: "mileage",
-    name: "Mileage",
-    description: "Odometer reading in miles",
+    name: "Miles",
+    description: "Odometer reading in miles (editable in product admin)",
     type: "number_integer",
   },
   {
@@ -60,8 +60,8 @@ export const VEHICLE_METAFIELD_DEFINITIONS = [
   {
     namespace: "vin_decoder",
     key: "title_status",
-    name: "Brand",
-    description: "Title brand / status (Clean, Salvage, Rebuilt, Junk, Flood)",
+    name: "Title",
+    description: "Title status (Clean, Rebuilt, Salvage, Junk, Flood)",
     type: "single_line_text_field",
   },
   {
@@ -70,6 +70,13 @@ export const VEHICLE_METAFIELD_DEFINITIONS = [
     name: "VIN",
     description: "Vehicle Identification Number",
     type: "single_line_text_field",
+  },
+  {
+    namespace: "vin_decoder",
+    key: "decoded",
+    name: "VIN decoded data",
+    description: "Full VIN decode result (JSON)",
+    type: "json",
   },
 ];
 
@@ -96,6 +103,18 @@ const LIST_QUERY = `#graphql
   query listVinDecoderDefinitions {
     metafieldDefinitions(namespace: "vin_decoder", ownerType: PRODUCT, first: 30) {
       nodes { id key name namespace }
+    }
+  }
+`;
+
+/** Keys to pin so they appear in Shopify product admin (editable like standard fields). */
+const PINNED_KEYS = ["title_status", "mileage"];
+
+const PIN_MUTATION = `#graphql
+  mutation metafieldDefinitionPin($identifier: MetafieldDefinitionIdentifierInput!) {
+    metafieldDefinitionPin(identifier: $identifier) {
+      pinnedDefinition { name key namespace }
+      userErrors { field message }
     }
   }
 `;
@@ -201,6 +220,25 @@ export async function createVehicleMetafieldDefinitions(admin) {
       } catch (err) {
         results.push({ key: def.key, name: def.name, status: "error", error: err?.message || String(err) });
       }
+    }
+  }
+
+  // Pin Title and Miles so they appear in product admin and can be edited like standard fields
+  for (const key of PINNED_KEYS) {
+    try {
+      const res = await graphql(PIN_MUTATION, {
+        variables: {
+          identifier: { ownerType: "PRODUCT", namespace: "vin_decoder", key },
+        },
+      });
+      const { data } = await res.json();
+      const errs = data?.metafieldDefinitionPin?.userErrors ?? [];
+      const nonFatal = errs.every((e) => (e?.message ?? "").toLowerCase().includes("already") || (e?.message ?? "").toLowerCase().includes("pinned"));
+      if (errs.length && !nonFatal) {
+        results.push({ key, name: key, status: "error", error: errs.map((e) => e.message).join("; ") });
+      }
+    } catch (_) {
+      // Non-fatal: definitions exist; pin may fail if already pinned or permissions
     }
   }
 
