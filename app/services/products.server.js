@@ -242,34 +242,50 @@ export async function createProductFull(admin, options) {
   // Passing an empty array can cause Shopify to return "syntax error, unexpected end of file".
   const hasMedia = mediaForApi.length > 0;
 
-  // Retry once on transient GraphQL errors (empty/truncated response from Shopify).
-  let createData;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const result = await runGraphQLWithUserErrors(graphql, {
-        query: hasMedia
-          ? `#graphql mutation productCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) { productCreate(product: $product, media: $media) { product { id title status } userErrors { field message } } }`
-          : `#graphql mutation productCreate($product: ProductCreateInput!) { productCreate(product: $product) { product { id title status } userErrors { field message } } }`,
-        variables: hasMedia
-          ? { product: productInput, media: mediaForApi }
-          : { product: productInput },
-      }, "productCreate");
-      createData = result.data;
-      break;
-    } catch (err) {
-      const isTransient = /syntax error|unexpected end of file|graphql_parse|graphql_error/i.test(err?.message ?? err?.code ?? "");
-      if (attempt < 2 && isTransient) {
-        console.warn(`[createProductFull] productCreate transient error (attempt ${attempt}), retrying in 1s: ${err?.message}`);
-        await new Promise((r) => setTimeout(r, 1000));
-      } else {
-        throw err;
+  let productId;
+  let product = { id: null, title: productInput.title, status: productInput.status };
+
+  try {
+    const result = await runGraphQLWithUserErrors(graphql, {
+      query: hasMedia
+        ? `#graphql mutation productCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) { productCreate(product: $product, media: $media) { product { id title status } userErrors { field message } } }`
+        : `#graphql mutation productCreate($product: ProductCreateInput!) { productCreate(product: $product) { product { id title status } userErrors { field message } } }`,
+      variables: hasMedia
+        ? { product: productInput, media: mediaForApi }
+        : { product: productInput },
+    }, "productCreate");
+    const createData = result.data?.productCreate?.product;
+    if (createData?.id) {
+      productId = createData.id;
+      product = createData;
+    }
+  } catch (err) {
+    const isLikelyResponseTruncated = /syntax error|unexpected end of file|graphql_parse|failed to parse/i.test(err?.message ?? err?.code ?? "");
+    if (isLikelyResponseTruncated) {
+      // Product often was created on Shopify but we got a truncated/bad response. Do not retry (would create duplicate).
+      // Recover by finding a recently created product with the same title (Shopify native resources).
+      console.warn("[createProductFull] productCreate response error (product may have been created), attempting recovery:", err?.message);
+      try {
+        const { data: listData } = await runGraphQL(graphql, {
+          query: `#graphql query recentProducts { products(first: 15, sortKey: CREATED_AT, reverse: true) { nodes { id title status createdAt } } }`,
+        });
+        const nodes = listData?.products?.nodes ?? [];
+        const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+        const wantTitle = (productInput.title || "").trim();
+        const recent = nodes.find((n) => n?.id && n?.createdAt >= twoMinutesAgo && (n.title || "").trim() === wantTitle);
+        if (recent?.id) {
+          productId = recent.id;
+          product = { id: recent.id, title: recent.title, status: recent.status };
+          console.log("[createProductFull] recovery: found product by title (Shopify native products query)", recent.id);
+        }
+      } catch (recoveryErr) {
+        console.warn("[createProductFull] recovery query failed:", recoveryErr?.message);
       }
     }
+    if (!productId) throw err;
   }
 
-  const product = createData?.productCreate?.product;
-  if (!product?.id) throw new Error("Could not create product.");
-  const productId = product.id;
+  if (!productId) throw new Error("Could not create product.");
 
   // All post-create steps are best-effort — if they fail, the product still exists.
   // We return warnings instead of failing so users don't see a 502 for an already-created product.
