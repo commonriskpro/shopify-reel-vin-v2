@@ -64,7 +64,13 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { admin, session } = await authenticate.admin(request);
+  let admin, session;
+  try {
+    ({ admin, session } = await authenticate.admin(request));
+  } catch (err) {
+    if (err instanceof Response) return err;
+    return Response.json({ ok: false, error: "Authentication required" }, { status: 401 });
+  }
   const form = await request.formData();
   const intent = form.get("intent");
   const limited = enforceRateLimit(request, {
