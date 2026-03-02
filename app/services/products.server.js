@@ -19,6 +19,33 @@ function sanitizeForGraphQL(s) {
 }
 
 /**
+ * Publish a product to the Online Store sales channel. Requires read_publications + write_publications scope.
+ * @param {import("@shopify/shopify-api").AdminApiContext["graphql"]} graphql
+ * @param {string} productId - GID
+ * @returns {Promise<string | null>} Warning message if publish failed, null if success or skip
+ */
+async function publishProductToOnlineStore(graphql, productId) {
+  try {
+    const { data: pubData } = await runGraphQL(graphql, {
+      query: `#graphql query getPublications { publications(first: 15) { nodes { id name } } }`,
+    });
+    const pubNodes = pubData?.publications?.nodes ?? [];
+    const onlineStorePub = pubNodes.find((p) => /online store/i.test(p?.name ?? "")) ?? pubNodes[0];
+    if (!onlineStorePub?.id) return null;
+    await runGraphQLWithUserErrors(graphql, {
+      query: `#graphql mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
+        publishablePublish(id: $id, input: $input) { publishable { id } userErrors { field message } }
+      }`,
+      variables: { id: productId, input: [{ publicationId: onlineStorePub.id }] },
+    }, "publishablePublish");
+    return null;
+  } catch (err) {
+    if (/already published|already active/i.test(err?.message ?? "")) return null;
+    return "Could not publish to Online Store. Add read_publications,write_publications to app scopes and reinstall.";
+  }
+}
+
+/**
  * @param {import("@shopify/shopify-api").AdminApiContext} admin
  * @param {{ vin: string; title: string; decoded?: object | null; titleStatus?: string; mileage?: number | string }} options
  * @returns {Promise<{ productId: string; product: { id: string }; decoded?: object; warnings?: Array<{ code: string; message: string }> }>}
@@ -65,6 +92,10 @@ export async function createProductFromVin(admin, options) {
   if (!product?.id) throw new Error("Could not create product.");
   const productId = product.id;
 
+  const warnings = [];
+  const publishWarn = await publishProductToOnlineStore(graphql, productId);
+  if (publishWarn) warnings.push({ code: "PUBLISH_SKIPPED", message: publishWarn });
+
   const metafieldsPayload = [
     { namespace: "vin_decoder", key: "vin", type: "single_line_text_field", value: vinForNote },
     { namespace: "vin_decoder", key: "decoded", type: "json", value: JSON.stringify({ ...(decoded || {}), vin: vinForNote }) },
@@ -85,8 +116,6 @@ export async function createProductFromVin(admin, options) {
       metafieldsPayload.push({ namespace: "vin_decoder", key: "mileage", type: "number_integer", value: String(mileageNum) });
     }
   }
-
-  const warnings = [];
 
   if (metafieldsPayload.length > 0) {
     try {
@@ -149,9 +178,15 @@ export async function createProductFromVin(admin, options) {
               },
             });
             const setQtyErrs = setQtyData?.inventorySetQuantities?.userErrors ?? [];
-            if (setQtyErrs.length > 0) inventoryError = setQtyErrs.map((e) => e.message || e.code).join("; ");
+            const qtyMsgs = setQtyErrs
+              .map((e) => e.message || e.code)
+              .filter((m) => !/already active|not allowed to set available quantity when the item is already active/i.test(m));
+            if (qtyMsgs.length > 0) inventoryError = qtyMsgs.join("; ");
           } catch (err) {
-            inventoryError = err?.message ?? String(err);
+            const msg = err?.message ?? String(err);
+            if (!/already active|not allowed to set available quantity when the item is already active/i.test(msg)) {
+              inventoryError = msg;
+            }
           }
         } else {
           inventoryError = "Could not find a location for inventory.";
@@ -199,6 +234,8 @@ export async function createProductFull(admin, options) {
     metafields = [],
     vin,
     decoded,
+    titleStatus,
+    mileage,
     media: mediaInput = [],
   } = options;
 
@@ -239,8 +276,15 @@ export async function createProductFull(admin, options) {
     : [];
 
   // Only include media in the mutation when there are actual media items.
-  // Passing an empty array can cause Shopify to return "syntax error, unexpected end of file".
   const hasMedia = mediaForApi.length > 0;
+  console.log(JSON.stringify({
+    ts: new Date().toISOString(),
+    event: "CREATE_PRODUCT_START",
+    titleLen: (productInput.title || "").length,
+    descriptionLen: (productInput.descriptionHtml || "").length,
+    hasMedia,
+    mediaCount: mediaForApi.length,
+  }));
 
   let productId;
   let product = { id: null, title: productInput.title, status: productInput.status };
@@ -262,9 +306,12 @@ export async function createProductFull(admin, options) {
   } catch (err) {
     const isLikelyResponseTruncated = /syntax error|unexpected end of file|graphql_parse|failed to parse/i.test(err?.message ?? err?.code ?? "");
     if (isLikelyResponseTruncated) {
-      // Product often was created on Shopify but we got a truncated/bad response. Do not retry (would create duplicate).
-      // Recover by finding a recently created product with the same title (Shopify native resources).
-      console.warn("[createProductFull] productCreate response error (product may have been created), attempting recovery:", err?.message);
+      console.warn(JSON.stringify({
+        ts: new Date().toISOString(),
+        event: "CREATE_PRODUCT_RECOVERY_ATTEMPT",
+        errCode: err?.code,
+        errMessage: (err?.message ?? "").slice(0, 150),
+      }));
       try {
         const { data: listData } = await runGraphQL(graphql, {
           query: `#graphql query recentProducts { products(first: 15, sortKey: CREATED_AT, reverse: true) { nodes { id title status createdAt } } }`,
@@ -276,10 +323,15 @@ export async function createProductFull(admin, options) {
         if (recent?.id) {
           productId = recent.id;
           product = { id: recent.id, title: recent.title, status: recent.status };
-          console.log("[createProductFull] recovery: found product by title (Shopify native products query)", recent.id);
+          console.log(JSON.stringify({ ts: new Date().toISOString(), event: "CREATE_PRODUCT_RECOVERY_OK", productId: recent.id }));
         }
       } catch (recoveryErr) {
-        console.warn("[createProductFull] recovery query failed:", recoveryErr?.message);
+        console.error(JSON.stringify({
+          ts: new Date().toISOString(),
+          event: "CREATE_PRODUCT_RECOVERY_FAIL",
+          errCode: recoveryErr?.code,
+          errMessage: (recoveryErr?.message ?? "").slice(0, 150),
+        }));
       }
     }
     if (!productId) throw err;
@@ -288,8 +340,11 @@ export async function createProductFull(admin, options) {
   if (!productId) throw new Error("Could not create product.");
 
   // All post-create steps are best-effort — if they fail, the product still exists.
-  // We return warnings instead of failing so users don't see a 502 for an already-created product.
   const warnings = [];
+
+  const publishWarn = await publishProductToOnlineStore(graphql, productId);
+  if (publishWarn) warnings.push({ code: "PUBLISH_SKIPPED", message: publishWarn });
+
   let variantNode = null;
   try {
     const { data: vData } = await runGraphQL(graphql, {
@@ -346,7 +401,11 @@ export async function createProductFull(admin, options) {
             variables: { inventoryItemId: invItemId, locationId, available: 1 },
           }, "inventoryActivate");
         } catch (err) {
-          warnings.push({ code: "INVENTORY_NOT_SET", message: err?.message ?? "Could not activate inventory." });
+          const msg = err?.message ?? "";
+          // "Already active at location" is success — don't warn
+          if (!/already active|not allowed to set available quantity when the item is already active/i.test(msg)) {
+            warnings.push({ code: "INVENTORY_NOT_SET", message: msg || "Could not activate inventory." });
+          }
         }
       } else {
         warnings.push({ code: "INVENTORY_NOT_SET", message: "Could not find a location for inventory." });
@@ -368,6 +427,16 @@ export async function createProductFull(admin, options) {
     if (decoded.fuelTypePrimary) vinDecoderMetafields.push({ namespace: "vin_decoder", key: "fuel_type", type: "single_line_text_field", value: decoded.fuelTypePrimary });
     const normTransmission = normalizeTransmission(decoded.transmissionStyle);
     if (normTransmission) vinDecoderMetafields.push({ namespace: "vin_decoder", key: "transmission", type: "single_line_text_field", value: normTransmission });
+  }
+  const validTitleStatuses = ["Clean", "Rebuilt", "Salvage", "Junk", "Flood"];
+  if (titleStatus && validTitleStatuses.includes(String(titleStatus).trim())) {
+    vinDecoderMetafields.push({ namespace: "vin_decoder", key: "title_status", type: "single_line_text_field", value: String(titleStatus).trim() });
+  }
+  if (mileage != null && mileage !== "") {
+    const mileageNum = typeof mileage === "number" ? mileage : parseInt(String(mileage).replace(/\D/g, ""), 10);
+    if (!Number.isNaN(mileageNum) && mileageNum >= 0) {
+      vinDecoderMetafields.push({ namespace: "vin_decoder", key: "mileage", type: "number_integer", value: String(mileageNum) });
+    }
   }
 
   const allMetafields = [...metafields, ...vinDecoderMetafields];

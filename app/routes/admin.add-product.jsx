@@ -36,6 +36,8 @@ const actionBodySchema = z.object({
   vendor: z.string().optional(),
   productType: z.string().optional(),
   tagsString: z.string().optional(),
+  titleStatus: z.string().optional(),
+  mileage: z.union([z.string(), z.number()]).optional(),
   status: z.string().optional(),
   categoryId: z.string().optional(),
   templateSuffix: z.string().optional(),
@@ -132,6 +134,8 @@ export const action = async ({ request }) => {
     vendor,
     productType,
     tagsString,
+    titleStatus,
+    mileage,
     status,
     categoryId,
     templateSuffix,
@@ -188,6 +192,8 @@ export const action = async ({ request }) => {
       sellWhenOutOfStock: sellWhenOutOfStock === true,
       vin: vin?.trim() || undefined,
       decoded: decoded || undefined,
+      titleStatus: titleStatus?.trim() || undefined,
+      mileage: mileage != null && mileage !== "" ? mileage : undefined,
       media: mediaForCreate.length ? mediaForCreate : undefined,
     });
     return Response.json({
@@ -196,12 +202,21 @@ export const action = async ({ request }) => {
       ...(result.warnings?.length && { warnings: result.warnings }),
     });
   } catch (err) {
-    logServerError("admin.add-product.action", err, { shop: session?.shop });
     const msg = err?.message ?? "";
+    const code = err?.code ?? "?";
+    console.error(JSON.stringify({
+      ts: new Date().toISOString(),
+      event: "ADMIN_ADD_PRODUCT_ERROR",
+      shop: session?.shop ?? null,
+      errCode: code,
+      errMessage: msg.slice(0, 200),
+      hint: "See [shopify-graphql] RESPONSE_GRAPHQL_ERR / responseBodyPreview in logs above for root cause",
+    }));
+    logServerError("admin.add-product.action", err, { shop: session?.shop, errCode: code });
     let userMessage = msg || "Could not create product.";
     if (/syntax error|unexpected end of file|unexpected end of json|failed to parse graphql response/i.test(msg)) {
       userMessage =
-        "Save failed (server or Shopify error). Check Vercel logs: if you see \"Can't reach database\", fix DATABASE_URL and ensure your database allows connections from Vercel. Otherwise try again in a moment.";
+        "Save failed: Shopify returned a GraphQL error. Check Vercel logs for \"RESPONSE_GRAPHQL_ERR\" and \"responseBodyPreview\" to diagnose. If you see \"Can't reach database\", fix DATABASE_URL.";
     }
     return Response.json(
       { error: userMessage },
@@ -234,6 +249,8 @@ export default function AddProduct() {
   const [vendor, setVendor] = useState("");
   const [productType, setProductType] = useState("Vehicles");
   const [tagsString, setTagsString] = useState("");
+  const [titleStatus, setTitleStatus] = useState("");
+  const [mileage, setMileage] = useState("");
   const [status, setStatus] = useState("ACTIVE");
   const [categoryId, setCategoryId] = useState(() => defaultCategoryId ?? "");
   const [templateSuffix, setTemplateSuffix] = useState("default-product");
@@ -313,6 +330,8 @@ export default function AddProduct() {
         sellWhenOutOfStock,
         ...(vin.trim() && { vin: vin.trim().toUpperCase() }),
         ...(decoded && { decoded }),
+        ...(titleStatus.trim() && { titleStatus: titleStatus.trim() }),
+        ...(mileage.trim() !== "" && { mileage: mileage.trim() }),
         media: pendingMedia.map((m) => ({
           originalSource: m.originalSource,
           mediaContentType: m.mediaContentType || "IMAGE",
@@ -329,6 +348,8 @@ export default function AddProduct() {
     setVendor("");
     setProductType("Vehicles");
     setTagsString("");
+    setTitleStatus("");
+    setMileage("");
     setStatus("ACTIVE");
     setCategoryId(defaultCategoryId ?? "");
     setSeoTitle("");
@@ -570,39 +591,36 @@ export default function AddProduct() {
               </div>
 
               <div className="add-product-card">
-                <div className="add-product-card-heading">
-                  <label className="add-product-label">Product organization</label>
-                  <span className="add-product-card-heading-icon" role="img" aria-label="Info">ℹ</span>
-                </div>
-                <input
-                  type="text"
+                <label className="add-product-label" htmlFor="add-product-title-status">Title</label>
+                <select
+                  id="add-product-title-status"
                   className="add-product-input"
-                  style={{ marginBottom: "12px" }}
-                  placeholder="Type"
-                  value={productType}
-                  onChange={(e) => setProductType(e.target?.value ?? "")}
-                />
+                  value={titleStatus}
+                  onChange={(e) => setTitleStatus(e.target.value)}
+                  aria-describedby="add-product-title-status-hint"
+                >
+                  <option value="">Select title status</option>
+                  <option value="Clean">Clean</option>
+                  <option value="Rebuilt">Rebuilt</option>
+                  <option value="Salvage">Salvage</option>
+                  <option value="Junk">Junk</option>
+                  <option value="Flood">Flood</option>
+                </select>
+                <p id="add-product-title-status-hint" className="add-product-hint">Saved to product metafield (Brand) for filters.</p>
+
+                <label className="add-product-label" htmlFor="add-product-mileage" style={{ marginTop: "12px", display: "block" }}>Miles</label>
                 <input
-                  type="text"
+                  id="add-product-mileage"
+                  type="number"
+                  min="0"
+                  step="1"
                   className="add-product-input"
-                  style={{ marginBottom: "12px" }}
-                  placeholder="Vendor"
-                  value={vendor}
-                  onChange={(e) => setVendor(e.target?.value ?? "")}
+                  placeholder="e.g. 45000"
+                  value={mileage}
+                  onChange={(e) => setMileage(e.target?.value ?? "")}
+                  aria-describedby="add-product-mileage-hint"
                 />
-                <input
-                  type="text"
-                  className="add-product-input"
-                  style={{ marginBottom: "12px" }}
-                  placeholder="Collections"
-                />
-                <input
-                  type="text"
-                  className="add-product-input"
-                  placeholder="Tags"
-                  value={tagsString}
-                  onChange={(e) => setTagsString(e.target?.value ?? "")}
-                />
+                <p id="add-product-mileage-hint" className="add-product-hint">Odometer reading. Saved to product metafield for filters.</p>
               </div>
 
               <div className="add-product-card">

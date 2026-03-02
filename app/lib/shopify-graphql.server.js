@@ -1,10 +1,12 @@
 /**
  * Central Shopify GraphQL wrapper. All Shopify GraphQL calls must go through this.
  * Normalizes HTTP errors, top-level errors, and userErrors. No secrets in logs.
+ * Full diagnostic logging for "syntax error, unexpected end of file" debugging.
  * @see docs/DMS-STEP1-SPEC.md §10
  */
 
 import { logServerError } from "../http.server.js";
+import { graphqlLog } from "./graphql-debug.server.js";
 
 /** @typedef {"VALIDATION"|"SHOPIFY"|"VPIC"|"DB"|"INTERNAL"} ErrorSource */
 
@@ -20,10 +22,11 @@ import { logServerError } from "../http.server.js";
  * @throws {GraphQLError}
  */
 export async function runGraphQL(graphql, { query, variables = {}, operationName }) {
-  // Defensive guard — if query is empty the Shopify API returns "syntax error, unexpected end of file"
-  const queryStr = typeof query === "string" ? query.trim() : "";
+  // Trim and strip #graphql comment (tooling-only); some environments may choke on it
+  let queryStr = typeof query === "string" ? query.trim() : "";
+  if (queryStr.startsWith("#graphql")) queryStr = queryStr.slice(8).trim();
   if (!queryStr) {
-    console.error("[shopify-graphql] EMPTY_QUERY detected — query string is empty or undefined", { operationName });
+    graphqlLog("EMPTY_QUERY", { op: operationName ?? "?" });
     throw {
       code: "EMPTY_QUERY",
       message: "GraphQL query string is empty (internal error)",
@@ -32,18 +35,29 @@ export async function runGraphQL(graphql, { query, variables = {}, operationName
     };
   }
 
-  // Log query fingerprint (first 120 chars, no secrets) and variable key count for debugging
-  const querySnippet = queryStr.slice(0, 120).replace(/\s+/g, " ");
   const varKeys = Object.keys(variables || {});
-  console.log(`[shopify-graphql] SEND op=${operationName ?? "?"} varKeys=[${varKeys.join(",")}] queryLen=${queryStr.length} query="${querySnippet}"`);
+  let varPayloadBytes = 0;
+  try {
+    varPayloadBytes = JSON.stringify(variables).length;
+  } catch (_) {}
+  graphqlLog("REQUEST_SEND", {
+    op: operationName ?? "?",
+    queryLen: queryStr.length,
+    varKeys: varKeys.join(","),
+    varPayloadBytes,
+    queryPreview: queryStr.slice(0, 200).replace(/\s+/g, " "),
+  });
 
-  const res = await graphql(queryStr, { variables, operationName });
+  // Only pass operationName when defined (undefined can break some clients)
+  const opts = { variables };
+  if (operationName != null && operationName !== "") opts.operationName = operationName;
+  const res = await graphql(queryStr, opts);
+
   const status = res?.status ?? (res.ok === false ? 500 : 200);
+  const contentType = (res && typeof res.headers?.get === "function") ? res.headers.get("content-type") : undefined;
   let rawText = "";
   let json;
   try {
-    // Use .text() + JSON.parse so we can log the raw body on failure.
-    // Fall back to .json() directly if .text() is not available (e.g. test mocks).
     if (typeof res.text === "function") {
       rawText = await res.text();
       json = JSON.parse(rawText);
@@ -51,8 +65,12 @@ export async function runGraphQL(graphql, { query, variables = {}, operationName
       json = await res.json();
     }
   } catch (e) {
-    // Log first 300 chars of raw body so we can see what Shopify actually returned
-    console.error("[shopify-graphql] PARSE_FAIL status=" + status + " raw=" + rawText.slice(0, 300));
+    graphqlLog("RESPONSE_PARSE_FAIL", {
+      status,
+      contentType: contentType ?? "?",
+      bodyLen: rawText.length,
+      bodyPreview: rawText.slice(0, 800),
+    });
     logServerError("shopify-graphql.parse", e instanceof Error ? e : new Error(String(e)), { requestId: "[no-request]", status });
     throw {
       code: "GRAPHQL_PARSE",
@@ -65,6 +83,7 @@ export async function runGraphQL(graphql, { query, variables = {}, operationName
 
   if (status >= 400) {
     const message = json?.errors?.[0]?.message ?? `HTTP ${status}`;
+    graphqlLog("RESPONSE_HTTP_ERR", { status, contentType, bodyLen: rawText.length, bodyPreview: rawText.slice(0, 500) });
     logServerError("shopify-graphql.http", new Error(message), { status, requestId: "[no-request]" });
     throw {
       code: "GRAPHQL_HTTP",
@@ -79,8 +98,14 @@ export async function runGraphQL(graphql, { query, variables = {}, operationName
   if (Array.isArray(topLevelErrors) && topLevelErrors.length > 0) {
     const first = topLevelErrors[0];
     const message = first?.message ?? "GraphQL error";
-    // Log the full error + query snippet to diagnose "syntax error, unexpected end of file"
-    console.error(`[shopify-graphql] TOP_LEVEL_ERROR op=${operationName ?? "?"} msg="${message}" extensions=${JSON.stringify(first?.extensions)} querySnippet="${querySnippet}"`);
+    graphqlLog("RESPONSE_GRAPHQL_ERR", {
+      op: operationName ?? "?",
+      msg: message,
+      extensions: first?.extensions,
+      responseBodyLen: rawText.length,
+      responseBodyPreview: rawText.slice(0, 1200),
+      queryPreview: queryStr.slice(0, 400).replace(/\s+/g, " "),
+    });
     logServerError("shopify-graphql.errors", new Error(message), { requestId: "[no-request]", operationName });
     throw {
       code: first?.extensions?.code ?? "GRAPHQL_ERROR",
