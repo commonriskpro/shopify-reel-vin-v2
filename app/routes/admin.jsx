@@ -98,6 +98,7 @@ export default function App() {
         <s-link href="/admin">VIN Decoder</s-link>
         <s-link href="/admin/add-product">Add product (full)</s-link>
         <s-link href="/admin/reels">Shoppable Reels</s-link>
+        <s-link href="/admin/setup">Filter Setup</s-link>
       </s-app-nav>
       <Outlet />
     </AppProvider>
