@@ -1,0 +1,74 @@
+{% comment %}
+  Full-width Vehicle Description section for product template (dealer layout).
+  One column: heading + product.description. Structure allows adding a second column (e.g. Equipment) later.
+{% endcomment %}
+{% if product != blank and product.description != blank %}
+  {%- style -%}
+    .section-{{ section.id }}-padding { padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px; padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px; }
+    @media screen and (min-width: 750px) {
+      .section-{{ section.id }}-padding { padding-top: {{ section.settings.padding_top }}px; padding-bottom: {{ section.settings.padding_bottom }}px; }
+    }
+  {%- endstyle -%}
+  <div class="product-description-full section-{{ section.id }}-padding" {{ section.shopify_attributes }}>
+    <div class="page-width">
+      <div class="product-description-full__grid">
+        <div class="product-description-full__col product-description-full__col--description">
+          {% if section.settings.heading != blank %}
+            <h2 class="product-description-full__heading">{{ section.settings.heading }}</h2>
+          {% endif %}
+          <div class="product-description-full__content rte">
+            {{ product.description }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <style>
+    .product-description-full__grid { display: grid; gap: 2rem; }
+    @media (min-width: 750px) { .product-description-full__grid { grid-template-columns: 1fr; } }
+    .product-description-full__heading { color: #dc2626; margin: 0 0 1rem; font-size: 1.5rem; font-weight: 700; }
+    .product-description-full__content { line-height: 1.6; }
+  </style>
+{% endif %}
+
+{% schema %}
+{
+  "name": "Vehicle Description",
+  "tag": "section",
+  "class": "section-product-description-full",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Vehicle Description"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Top padding",
+      "default": 36
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Bottom padding",
+      "default": 36
+    }
+  ],
+  "presets": [
+    {
+      "name": "Vehicle Description"
+    }
+  ],
+  "templates": ["product"]
+}
+{% endschema %}

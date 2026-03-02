@@ -1,0 +1,28 @@
+name: Reels Sync Every 6 Hours
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reels sync endpoint
+        env:
+          REELS_SYNC_URL: ${{ secrets.REELS_SYNC_URL }}
+          REELS_SYNC_SECRET: ${{ secrets.REELS_SYNC_SECRET }}
+        run: |
+          if [ -z "$REELS_SYNC_URL" ] || [ -z "$REELS_SYNC_SECRET" ]; then
+            echo "Missing REELS_SYNC_URL or REELS_SYNC_SECRET secret"
+            exit 1
+          fi
+          status=$(curl -sS -o response.json -w "%{http_code}" \
+            -H "Authorization: Bearer $REELS_SYNC_SECRET" \
+            "$REELS_SYNC_URL")
+          cat response.json
+          if [ "$status" -ge 400 ]; then
+            echo "Sync failed with HTTP $status"
+            exit 1
+          fi

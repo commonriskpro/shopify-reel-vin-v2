@@ -1,0 +1,38 @@
+{% comment %}
+  Renders "Call now" and "Chat on WhatsApp" buttons for product pages.
+  Accepts:
+  - block: {Object} block with settings.phone and settings.whatsapp_number (optional)
+  - OR phone: {String} phone number for both (e.g. "786-303-2380")
+  - whatsapp_number: {String} digits only with country code for wa.me (e.g. "17863032380"). If blank, derived from phone.
+{% endcomment %}
+{% if block != blank %}
+  {% assign phone = block.settings.phone | strip %}
+  {% assign whatsapp_raw = block.settings.whatsapp_number | strip | replace: ' ', '' | replace: '-', '' | replace: '(', '' | replace: ')', '' | replace: '+', '' %}
+  {% if whatsapp_raw == '' and phone != '' %}
+    {% assign whatsapp_raw = phone | replace: ' ', '' | replace: '-', '' | replace: '(', '' | replace: ')', '' | replace: '+', '' %}
+  {% endif %}
+{% else %}
+  {% assign phone = contact_buttons_phone | default: '' %}
+  {% assign whatsapp_raw = whatsapp_number | default: phone | replace: ' ', '' | replace: '-', '' | replace: '(', '' | replace: ')', '' | replace: '+', '' %}
+{% endif %}
+
+{% if phone != blank %}
+  <div class="contact-buttons product-form__contact-buttons" {% if block != blank %}{{ block.shopify_attributes }}{% endif %}>
+    <a href="tel:{{ phone | replace: ' ', '' | replace: '-', '' | replace: '(', '' | replace: ')', '' }}" class="contact-buttons__btn contact-buttons__btn--call button button--full-width">
+      {% if block != blank and block.settings.call_label != blank %}{{ block.settings.call_label }}{% else %}Call now{% endif %}
+    </a>
+    {% if whatsapp_raw != '' %}
+      <a href="https://wa.me/{{ whatsapp_raw }}" target="_blank" rel="noopener noreferrer" class="contact-buttons__btn contact-buttons__btn--whatsapp button button--full-width">
+        {% if block != blank and block.settings.whatsapp_label != blank %}{{ block.settings.whatsapp_label }}{% else %}Chat on WhatsApp{% endif %}
+      </a>
+    {% endif %}
+  </div>
+  <style>
+    .contact-buttons { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
+    .contact-buttons__btn { text-decoration: none; text-align: center; font-weight: 600; }
+    .contact-buttons__btn--call,
+    .contact-buttons__btn--whatsapp { background: #2563eb; color: #fff; border: none; }
+    .contact-buttons__btn--call:hover,
+    .contact-buttons__btn--whatsapp:hover { background: #1d4ed8; color: #fff; }
+  </style>
+{% endif %}

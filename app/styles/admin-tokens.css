@@ -1,0 +1,42 @@
+/**
+ * Shared design tokens for admin UI (spacing, radius, motion).
+ * Use these variables in route-specific styles for consistency.
+ */
+:root {
+  --admin-space-xs: 4px;
+  --admin-space-sm: 8px;
+  --admin-space-md: 12px;
+  --admin-space-base: 16px;
+  --admin-space-lg: 20px;
+  --admin-radius-sm: 6px;
+  --admin-radius-md: 8px;
+  --admin-radius-lg: 12px;
+  --admin-radius-xl: 14px;
+  --admin-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --admin-duration-fast: 0.15s;
+  --admin-duration-normal: 0.25s;
+  --admin-color-text: #202223;
+  --admin-color-text-secondary: #6d7175;
+  --admin-color-text-muted: #8a8d91;
+  --admin-color-border: #e3e3e3;
+  --admin-color-border-strong: #c8ccd0;
+  --admin-color-surface: #fff;
+  --admin-color-surface-subtle: #f6f6f7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --admin-duration-fast: 0.01s;
+    --admin-duration-normal: 0.01s;
+  }
+  .admin-fallback-spinner {
+    animation: none !important;
+    border-top-color: #5c5f62 !important;
+  }
+}
+
+@keyframes admin-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

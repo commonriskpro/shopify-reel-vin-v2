@@ -1,0 +1,69 @@
+{% comment %}
+  VIN Decoder app – vehicle specs from product metafields.
+  Copy this file into your theme: snippets/vehicle-specs-from-vin.liquid
+  Then in your product template (e.g. product.liquid or main-product.liquid), add:
+    {% render 'vehicle-specs-from-vin', product: product %}
+  Only outputs markup when product has vin_decoder metafields.
+{% endcomment %}
+{% assign vin = product.metafields.vin_decoder.vin %}
+{% assign decoded = product.metafields.vin_decoder.decoded.value %}
+{% if vin != blank or decoded != nil %}
+  <div class="vehicle-specs vin-decoder-specs" {{ block.shopify_attributes }}>
+    {% if vin != blank %}
+      <p class="vehicle-specs__vin"><strong>VIN:</strong> {{ vin }}</p>
+    {% endif %}
+    {% if decoded != nil %}
+      <div class="vehicle-specs__grid">
+        {% if decoded.year != blank %}
+          <div class="vehicle-specs__item"><span class="vehicle-specs__label">Year</span><span class="vehicle-specs__value">{{ decoded.year }}</span></div>
+        {% endif %}
+        {% if decoded.make != blank %}
+          <div class="vehicle-specs__item"><span class="vehicle-specs__label">Make</span><span class="vehicle-specs__value">{{ decoded.make }}</span></div>
+        {% endif %}
+        {% if decoded.model != blank %}
+          <div class="vehicle-specs__item"><span class="vehicle-specs__label">Model</span><span class="vehicle-specs__value">{{ decoded.model }}</span></div>
+        {% endif %}
+        {% if decoded.trim != blank %}
+          <div class="vehicle-specs__item"><span class="vehicle-specs__label">Trim</span><span class="vehicle-specs__value">{{ decoded.trim }}</span></div>
+        {% endif %}
+        {% assign vehicle_type_raw = decoded.bodyClass | default: decoded.vehicleType %}
+        {% if vehicle_type_raw != blank %}
+          {% assign bt = vehicle_type_raw | upcase %}
+          {% assign body_normalized = vehicle_type_raw %}
+          {% if bt contains 'PICKUP' or bt contains 'TRUCK' %}{% assign body_normalized = 'Pickup' %}
+          {% elsif bt contains 'SUV' or bt contains 'SPORT UTILITY' or bt contains 'MULTI-PURPOSE' or bt contains 'MPV' %}{% assign body_normalized = 'SUV' %}
+          {% elsif bt contains 'SEDAN' or bt contains 'PASSENGER CAR' %}{% assign body_normalized = 'SEDAN' %}
+          {% elsif bt contains 'COUPE' %}{% assign body_normalized = 'COUPE' %}
+          {% elsif bt contains 'HATCHBACK' %}{% assign body_normalized = 'HATCHBACK' %}
+          {% elsif bt contains 'CONVERTIBLE' %}{% assign body_normalized = 'CONVERTIBLE' %}
+          {% elsif bt contains 'WAGON' %}{% assign body_normalized = 'WAGON' %}
+          {% elsif bt contains 'VAN' or bt contains 'MINIVAN' %}{% assign body_normalized = 'VAN' %}
+          {% endif %}
+          <div class="vehicle-specs__item"><span class="vehicle-specs__label">Vehicle type</span><span class="vehicle-specs__value">{{ body_normalized }}</span></div>
+        {% endif %}
+        {% if decoded.engineCylinders != blank %}
+          <div class="vehicle-specs__item"><span class="vehicle-specs__label">Engine</span><span class="vehicle-specs__value">{{ decoded.engineCylinders }} cylinder{% if decoded.displacementL != blank %} {{ decoded.displacementL }}L{% endif %}</span></div>
+        {% elsif decoded.displacementL != blank %}
+          <div class="vehicle-specs__item"><span class="vehicle-specs__label">Displacement</span><span class="vehicle-specs__value">{{ decoded.displacementL }}L</span></div>
+        {% endif %}
+        {% if decoded.fuelTypePrimary != blank %}
+          <div class="vehicle-specs__item"><span class="vehicle-specs__label">Fuel type</span><span class="vehicle-specs__value">{{ decoded.fuelTypePrimary }}</span></div>
+        {% endif %}
+        {% if decoded.driveType != blank %}
+          <div class="vehicle-specs__item"><span class="vehicle-specs__label">Drivetrain</span><span class="vehicle-specs__value">{{ decoded.driveType }}</span></div>
+        {% endif %}
+        {% if decoded.transmissionStyle != blank %}
+          <div class="vehicle-specs__item"><span class="vehicle-specs__label">Transmission</span><span class="vehicle-specs__value">{{ decoded.transmissionStyle }}</span></div>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+  <style>
+    .vin-decoder-specs { margin: 1.5em 0; padding: 1em; border: 1px solid var(--color-border, #e0e0e0); border-radius: 8px; background: var(--color-background-secondary, #f9f9f9); }
+    .vehicle-specs__vin { margin-bottom: 0.75em; font-size: 0.95em; }
+    .vehicle-specs__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75em 1.5em; }
+    .vehicle-specs__item { display: flex; flex-direction: column; gap: 0.2em; }
+    .vehicle-specs__label { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.03em; color: var(--color-foreground-secondary, #666); }
+    .vehicle-specs__value { font-weight: 500; }
+  </style>
+{% endif %}

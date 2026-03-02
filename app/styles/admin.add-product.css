@@ -1,0 +1,495 @@
+/**
+ * Add product page – Shopify Admin UI clone
+ * Grey page background, white section cards, same section order and context menus.
+ */
+.add-product-page {
+  background: #f6f6f7;
+  min-height: 100%;
+  padding: 20px 24px 40px;
+}
+
+.add-product-breadcrumb {
+  color: #6d7175;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.add-product-breadcrumb a {
+  color: #2c6ecb;
+  text-decoration: none;
+}
+
+.add-product-breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.add-product-grid {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 24px;
+  max-width: 1400px;
+}
+
+@media (max-width: 1024px) {
+  .add-product-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.add-product-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.add-product-card:last-child {
+  margin-bottom: 0;
+}
+
+.add-product-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #202223;
+  margin-bottom: 8px;
+}
+
+.add-product-hint {
+  font-size: 12px;
+  color: #6d7175;
+  margin-top: 6px;
+}
+
+.add-product-input {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #202223;
+  background: #fff;
+  border: 1px solid #c8ccd0;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.add-product-input:focus {
+  outline: none;
+  border-color: #2c6ecb;
+  box-shadow: 0 0 0 1px #2c6ecb;
+}
+
+.add-product-input::placeholder {
+  color: #8c9196;
+}
+
+.add-product-textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+/* Description toolbar mimic */
+.add-product-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 0;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #e3e3e3;
+}
+
+.add-product-toolbar-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #6d7175;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.add-product-toolbar-btn:hover {
+  background: #f1f1f1;
+  color: #202223;
+}
+
+.add-product-toolbar-select {
+  min-width: 100px;
+  padding: 4px 8px;
+  font-size: 13px;
+  border: 1px solid #c8ccd0;
+  border-radius: 4px;
+  background: #fff;
+  color: #202223;
+  margin-right: 4px;
+}
+
+/* Media drop zone – dashed box like Shopify */
+.add-product-media-box {
+  border: 2px dashed #c8ccd0;
+  border-radius: 12px;
+  background: #fafbfb;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+}
+
+.add-product-media-box-text {
+  font-size: 14px;
+  color: #6d7175;
+}
+
+.add-product-media-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.add-product-media-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c6ecb;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.add-product-media-btn:hover {
+  background: #f1f1f1;
+  color: #004c9c;
+}
+
+/* Media picker (full upload + select existing) */
+.media-picker {
+  width: 100%;
+}
+.media-picker-dropzone {
+  border: 2px dashed #c8ccd0;
+  border-radius: 12px;
+  background: #fafbfb;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+}
+.media-picker-thumbnails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+  justify-content: center;
+}
+.media-picker-thumb {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f1f1f1;
+}
+.media-picker-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.media-picker-thumb-badge {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  font-size: 10px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.media-picker-thumb-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.media-picker-thumb-remove:hover {
+  background: #b04545;
+}
+.media-picker-accepts {
+  font-size: 14px;
+  color: #6d7175;
+  margin: 0;
+}
+.media-picker-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.media-picker-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c6ecb;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.media-picker-btn:hover:not(:disabled) {
+  background: #f1f1f1;
+  color: #004c9c;
+}
+.media-picker-btn:disabled {
+  color: #8c9196;
+  cursor: not-allowed;
+}
+.media-picker-hidden-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.media-picker-hint {
+  font-size: 12px;
+  color: #6d7175;
+  margin: 8px 0 0;
+  max-width: 320px;
+  text-align: center;
+}
+.media-picker-modal-content {
+  padding: 16px 0;
+  min-height: 200px;
+}
+.media-picker-loading,
+.media-picker-empty {
+  color: #6d7175;
+  font-size: 14px;
+  margin: 0;
+}
+.media-picker-empty {
+  padding: 24px 0;
+}
+.media-picker-error {
+  color: #b04545;
+}
+.media-picker-files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.media-picker-file-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #c8ccd0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.media-picker-file-card:hover {
+  border-color: #2c6ecb;
+  box-shadow: 0 0 0 1px #2c6ecb;
+}
+.media-picker-file-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.media-picker-file-type {
+  font-size: 11px;
+  color: #6d7175;
+  margin-top: 4px;
+  text-transform: capitalize;
+}
+
+/* Price / Inventory context menu row */
+.add-product-options-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.add-product-option-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: #6d7175;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.add-product-option-item:hover {
+  background: #f1f1f1;
+  color: #202223;
+}
+
+.add-product-option-item svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+}
+
+/* Toggle switch – Shopify style */
+.add-product-toggle-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.add-product-toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #202223;
+}
+
+.add-product-toggle {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: #c8ccd0;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.add-product-toggle.active {
+  background: #008060;
+}
+
+.add-product-toggle::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.add-product-toggle.active::after {
+  transform: translateX(20px);
+}
+
+/* Inventory location row */
+.add-product-inventory-row {
+  display: grid;
+  grid-template-columns: 1fr 80px;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.add-product-inventory-location {
+  font-size: 14px;
+  color: #202223;
+}
+
+.add-product-inventory-qty {
+  max-width: 80px;
+}
+
+/* Publishing tabs – Online Store, Shop, Point of Sale */
+.add-product-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.add-product-tab {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6d7175;
+  background: #f6f6f7;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.add-product-tab:hover {
+  color: #202223;
+  background: #eee;
+}
+
+.add-product-tab.active {
+  background: #fff;
+  color: #202223;
+  border-color: #c8ccd0;
+  box-shadow: 0 1px 0 #fff;
+}
+
+/* Section header with icon */
+.add-product-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.add-product-card-heading .add-product-label {
+  margin-bottom: 0;
+}
+
+.add-product-card-heading-icon {
+  width: 16px;
+  height: 16px;
+  color: #6d7175;
+}
+
+/* Save bar */
+.add-product-save-bar {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e3e3e3;
+}
+
+/* Success banner above form */
+.add-product-success-bar {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  border: 1px solid #b3e0c6;
+  background: #f4faf6;
+}

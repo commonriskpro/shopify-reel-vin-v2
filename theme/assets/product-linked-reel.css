@@ -1,0 +1,46 @@
+/* Linked reel: in details column (non-dealer) or in third column (dealer layout) */
+.product__linked-reel-in-details {
+  margin-top: 1.5rem;
+  width: 100%;
+}
+.product__dealer-ctas-column .product__linked-reel-in-details {
+  margin-top: 1.25rem;
+}
+
+.product__linked-reel {
+  width: 100%;
+}
+
+.product__linked-reel-loading {
+  margin: 0;
+  padding: 1rem 0;
+  font-size: 0.9375rem;
+  color: rgba(var(--color-foreground), 0.7);
+}
+
+.product__linked-reel-video-wrap {
+  width: 100%;
+  border-radius: var(--media-radius, 0);
+  overflow: hidden;
+  background: rgba(var(--color-foreground), 0.05);
+}
+
+.product__linked-reel-video {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 60vh;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.product__linked-reel--has-reel .product__linked-reel-loading {
+  display: none;
+}
+
+.product__linked-reel-price {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2563eb;
+}

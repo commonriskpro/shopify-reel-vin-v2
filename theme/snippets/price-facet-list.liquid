@@ -1,0 +1,71 @@
+{% comment %}
+  Renders the price filter as a list of predefined ranges (e.g. $0 - $5,000, $5,000 - $10,000)
+  instead of From/To inputs. Matches the list-style price filter UI.
+  Accepts: filter, results_url, id_prefix (optional), filter_type (optional)
+{% endcomment %}
+{%- liquid
+  assign range_max = filter.range_max
+  if range_max == nil or range_max == 0
+    assign range_max = 100000
+  endif
+  comment
+    Shopify price is in cents. Convert to dollars for display and for URL param (theme may use dollars in params).
+  endcomment
+  assign range_max_dollars = range_max | divided_by: 100.0 | round
+  assign min_param = filter.min_value.param_name
+  assign max_param = filter.max_value.param_name
+  assign current_min = filter.min_value.value | default: 0
+  assign current_max = filter.max_value.value | default: range_max
+  assign price_buckets = "0,5000,10000,15000,20000,25000,30000,35000,40000,45000,50000,60000,70000,80000,90000,100000" | split: ","
+  assign separator = "?"
+  if results_url contains "?"
+    assign separator = "&"
+  endif
+-%}
+<ul class="facets__list facets__list--vertical price-facet-list list-unstyled" role="list">
+  {%- assign prev = 0 -%}
+  {%- for bucket in price_buckets -%}
+    {%- assign max_val = bucket | plus: 0 -%}
+    {%- if max_val <= range_max_dollars or prev == 0 -%}
+      {%- assign min_dollars = prev -%}
+      {%- assign max_dollars = max_val -%}
+      {%- if max_dollars > range_max_dollars -%}
+        {%- assign max_dollars = range_max_dollars -%}
+      {%- endif -%}
+      {%- capture range_url -%}{{ results_url }}{{ separator }}{{ min_param }}={{ min_dollars }}&{{ max_param }}={{ max_dollars }}{%- endcapture -%}
+      {%- assign is_active = false -%}
+      {%- assign bucket_min_cents = min_dollars | times: 100 -%}
+      {%- assign bucket_max_cents = max_dollars | times: 100 -%}
+      {%- if current_min == bucket_min_cents and current_max == bucket_max_cents -%}
+        {%- assign is_active = true -%}
+      {%- endif -%}
+      <li class="list-menu__item facets__item">
+        <a href="{{ range_url }}" class="facet-checkbox facets__label{% if is_active %} active{% endif %} link link--text">
+          <span class="facet-checkbox__text" aria-hidden="true">
+            {{ min_dollars | times: 100 | money }} - {{ max_dollars | times: 100 | money }}
+          </span>
+        </a>
+      </li>
+      {%- if max_dollars >= range_max_dollars -%}
+        {%- break -%}
+      {%- endif -%}
+      {%- assign prev = max_val -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- if prev > 0 and prev < range_max_dollars -%}
+    {%- capture range_url -%}{{ results_url }}{{ separator }}{{ min_param }}={{ prev }}&{{ max_param }}={{ range_max_dollars }}{%- endcapture -%}
+    {%- assign is_active = false -%}
+    {%- assign bucket_min_cents_last = prev | times: 100 -%}
+    {%- assign bucket_max_cents_last = range_max_dollars | times: 100 -%}
+    {%- if current_min == bucket_min_cents_last and current_max == bucket_max_cents_last -%}
+      {%- assign is_active = true -%}
+    {%- endif -%}
+    <li class="list-menu__item facets__item">
+      <a href="{{ range_url }}" class="facet-checkbox facets__label{% if is_active %} active{% endif %} link link--text">
+        <span class="facet-checkbox__text" aria-hidden="true">
+          {{ prev | times: 100 | money }} - {{ range_max_dollars | times: 100 | money }}
+        </span>
+      </a>
+    </li>
+  {%- endif -%}
+</ul>

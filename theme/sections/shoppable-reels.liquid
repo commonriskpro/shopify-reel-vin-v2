@@ -1,0 +1,251 @@
+{%- comment -%}
+  On the store homepage (index), hide this section when the app setting "Show reels on store homepage" is off.
+  The app sets shop metafield vin_decoder.show_reels_on_homepage (boolean). When false, don't render on index.
+{%- endcomment -%}
+{%- assign show_reels_section = true -%}
+{%- if template.name == 'index' -%}
+  {%- assign reels_home_setting = shop.metafields.vin_decoder.show_reels_on_homepage.value -%}
+  {%- if reels_home_setting == false or reels_home_setting == 'false' -%}
+    {%- assign show_reels_section = false -%}
+  {%- endif -%}
+{%- endif -%}
+
+{%- unless show_reels_section == false -%}
+{{ 'shoppable-reels.css' | asset_url | stylesheet_tag }}
+{{ 'section-image-banner.css' | asset_url | stylesheet_tag }}
+
+{%- if section.settings.reels_api_url != blank -%}
+  {%- assign api_url = section.settings.reels_api_url -%}
+  {%- if section.settings.show_only_homepage_reels -%}
+    {%- assign api_url = api_url | append: '?homepage=1' -%}
+  {%- endif -%}
+  <link rel="preconnect" href="{{ api_url | split: '?' | first | split: '//' | last | split: '/' | first }}" crossorigin>
+  <link rel="preload" href="{{ api_url }}" as="fetch" crossorigin>
+{%- endif -%}
+
+{%- liquid
+  if section.settings.background_image != blank
+    assign backdrop_image_url = section.settings.background_image | image_url: width: 1920
+  else
+    assign backdrop_image_url = 'speedy-motor-garage-hero.png' | asset_url
+  endif
+-%}
+{%- style -%}
+  .section-{{ section.id }}-padding .shoppable-reels {
+    --section-padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+    --section-padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+  }
+  .section-{{ section.id }}-padding .shoppable-reels__section-backdrop {
+    background-image: url({{ backdrop_image_url | escape }});
+  }
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding .shoppable-reels {
+      --section-padding-top: {{ section.settings.padding_top }}px;
+      --section-padding-bottom: {{ section.settings.padding_bottom }}px;
+    }
+  }
+{%- endstyle -%}
+
+<div
+  class="color-{{ section.settings.color_scheme }} gradient section-{{ section.id }}-padding"
+  data-shoppable-reels
+  data-reels-api-url="{{ section.settings.reels_api_url | escape }}"
+  data-homepage-only="{{ section.settings.show_only_homepage_reels }}"
+  data-products-base-url="{{ shop.url }}/products/"
+  data-prev-arrow-url="{{ 'icon-chevron-left.svg' | asset_url }}"
+  data-next-arrow-url="{{ 'icon-chevron-right.svg' | asset_url }}"
+  data-hold-variant-id="{% if section.settings.reserve_hold_variant_id != blank %}{{ section.settings.reserve_hold_variant_id | strip | escape }}{% else %}48137403236504{% endif %}"
+  data-reserve-button-label="{% if section.settings.reserve_button_label != blank %}{{ section.settings.reserve_button_label | strip | escape }}{% else %}Reserve{% endif %}"
+>
+  <div class="shoppable-reels__section-backdrop{% if section.settings.show_vehicle_search %} has-vehicle-search{% endif %}">
+    <div class="shoppable-reels__layout">
+    {%- if section.settings.show_vehicle_search -%}
+      <div class="shoppable-reels__vehicle-search-wrap">
+        <div class="shoppable-reels__vehicle-search banner__vehicle-search" aria-label="Search vehicles">
+          <form action="{{ routes.search_url }}" method="get" role="search" class="banner__vehicle-search-form">
+            <input type="hidden" name="type" value="product">
+            <h2 class="banner__vehicle-search-title">Search Vehicles</h2>
+            <div class="banner__vehicle-search-field">
+              <label for="ReelsVehicleSearch-{{ section.id }}" class="visually-hidden">Search</label>
+              <input
+                type="search"
+                id="ReelsVehicleSearch-{{ section.id }}"
+                name="q"
+                class="banner__vehicle-search-input"
+                placeholder="Search"
+                autocomplete="off"
+              >
+              <span class="banner__vehicle-search-icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+              </span>
+            </div>
+            <div class="banner__vehicle-search-row">
+              <div class="banner__vehicle-search-field">
+                <label for="ReelsVehicleMake-{{ section.id }}" class="visually-hidden">Make</label>
+                <select id="ReelsVehicleMake-{{ section.id }}" name="make" class="banner__vehicle-search-select">
+                  <option value="">All Makes</option>
+                </select>
+              </div>
+              <div class="banner__vehicle-search-field">
+                <label for="ReelsVehicleType-{{ section.id }}" class="visually-hidden">Type</label>
+                <select id="ReelsVehicleType-{{ section.id }}" name="vehicle_type" class="banner__vehicle-search-select">
+                  <option value="">All Types</option>
+                </select>
+              </div>
+            </div>
+            <div class="banner__vehicle-search-row">
+              <div class="banner__vehicle-search-field">
+                <label for="ReelsVehicleMinPrice-{{ section.id }}" class="visually-hidden">Min Price</label>
+                <input type="text" id="ReelsVehicleMinPrice-{{ section.id }}" name="min_price" class="banner__vehicle-search-input banner__vehicle-search-input--small" placeholder="Min Price" inputmode="numeric" autocomplete="off">
+              </div>
+              <div class="banner__vehicle-search-field">
+                <label for="ReelsVehicleMaxPrice-{{ section.id }}" class="visually-hidden">Max Price</label>
+                <input type="text" id="ReelsVehicleMaxPrice-{{ section.id }}" name="max_price" class="banner__vehicle-search-input banner__vehicle-search-input--small" placeholder="Max Price" inputmode="numeric" autocomplete="off">
+              </div>
+            </div>
+            <button type="submit" class="banner__vehicle-search-submit">SEARCH</button>
+          </form>
+        </div>
+      </div>
+    {%- endif -%}
+    <div class="shoppable-reels page-width shoppable-reels__carousel-wrap">
+      <div class="shoppable-reels__carousel" data-reels-carousel>
+        <button type="button" class="shoppable-reels__carousel-btn shoppable-reels__carousel-btn--prev" aria-label="Previous reels" data-carousel-prev hidden onclick="event.preventDefault();event.stopPropagation();var g=this.parentElement&&this.parentElement.querySelector('[data-reels-grid]');if(g){g.scrollBy({left:-260,behavior:'smooth'});}">
+          <img src="{{ 'icon-chevron-left.svg' | asset_url }}" alt="" width="24" height="24" aria-hidden="true" class="shoppable-reels__carousel-btn-icon">
+        </button>
+        <div data-reels-grid class="shoppable-reels__grid">
+          <p class="shoppable-reels__loading" aria-hidden="true">Loading reels…</p>
+        </div>
+        <button type="button" class="shoppable-reels__carousel-btn shoppable-reels__carousel-btn--next" aria-label="Next reels" data-carousel-next hidden onclick="event.preventDefault();event.stopPropagation();var g=this.parentElement&&this.parentElement.querySelector('[data-reels-grid]');if(g){g.scrollBy({left:260,behavior:'smooth'});}">
+          <img src="{{ 'icon-chevron-right.svg' | asset_url }}" alt="" width="24" height="24" aria-hidden="true" class="shoppable-reels__carousel-btn-icon">
+        </button>
+      </div>
+    </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ 'shoppable-reels.js' | asset_url }}" defer="defer"></script>
+
+{%- if section.settings.reels_api_url != blank -%}
+<script>
+  // Register service worker for caching
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('{{ 'reels-service-worker.js' | asset_url }}')
+        .then(function(registration) {
+          console.log('[Reels] ServiceWorker registered:', registration.scope);
+        })
+        .catch(function(error) {
+          console.log('[Reels] ServiceWorker registration failed:', error);
+        });
+    });
+  }
+</script>
+{%- endif -%}
+
+{%- endunless -%}
+
+{% schema %}
+{
+  "name": "Shoppable Reels",
+  "tag": "section",
+  "class": "section-shoppable-reels",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Reels"
+    },
+    {
+      "type": "select",
+      "id": "heading_size",
+      "label": "Heading size",
+      "options": [
+        { "value": "h0", "label": "Extra large" },
+        { "value": "h1", "label": "Large" },
+        { "value": "h2", "label": "Medium" },
+        { "value": "h3", "label": "Small" }
+      ],
+      "default": "h2"
+    },
+    {
+      "type": "text",
+      "id": "reels_api_url",
+      "label": "Reels API URL",
+      "default": "https://speedy-motor-reels-api-cloud.vercel.app/api/reels",
+      "info": "Full URL including /api/reels. Default points to the project Reels API (same DB as the app). Use https:// and forward slashes."
+    },
+    {
+      "type": "checkbox",
+      "id": "show_only_homepage_reels",
+      "label": "Show only reels selected for homepage",
+      "info": "When on, only reels you check \"Show on homepage\" for in the app appear here. Turn off to show all reels.",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_vehicle_search",
+      "label": "Show vehicle search form",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "reserve_hold_variant_id",
+      "label": "Reservation (hold) button – variant ID",
+      "default": "48137403236504",
+      "info": "Variant ID of your \"Vehicle hold – $1,000 (3 days)\" product. Same as in Vehicle specs (VIN) section. Reel modal will show a Reserve button that adds this hold to cart with the vehicle details."
+    },
+    {
+      "type": "text",
+      "id": "reserve_button_label",
+      "label": "Reservation button label",
+      "default": "Reserve"
+    },
+    {
+      "type": "image_picker",
+      "id": "background_image",
+      "label": "Background image",
+      "info": "Uses the same garage image as the banner if not set."
+    },
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "Color scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "header",
+      "content": "Section padding"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Top padding",
+      "default": 36
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Bottom padding",
+      "default": 36
+    }
+  ],
+  "presets": [
+    {
+      "name": "Shoppable Reels"
+    }
+  ]
+}
+{% endschema %}

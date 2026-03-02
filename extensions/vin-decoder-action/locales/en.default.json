@@ -1,0 +1,11 @@
+{
+  "name": "VIN Decoder",
+  "welcome": "Welcome to the {{target}} extension!",
+  "heading": "VIN Decoder",
+  "description": "Decode a vehicle VIN and optionally set this product's title to the decoded year, make, model, and trim.",
+  "currentProduct": "Current product title",
+  "vinLabel": "VIN",
+  "decode": "Decode",
+  "applyToProduct": "Apply to product",
+  "close": "Close"
+}

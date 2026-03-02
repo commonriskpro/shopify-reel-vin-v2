@@ -1,0 +1,39 @@
+{% comment %}
+  Renders "Hold for $1,000 (3 days)" button in the product form area. Hides Sold out / Buy it now when shown.
+  Pass section so we can scope the hide CSS to this product section only.
+{% endcomment %}
+{% if product != blank and block != blank %}
+  {% assign variant_id = block.settings.hold_variant_id | strip %}
+  {% assign label = block.settings.button_label | strip %}
+  {% if label == blank %}
+    {% assign label = 'Hold for $1,000 (3 days)' %}
+  {% endif %}
+
+  {% if variant_id != blank %}
+    {% assign vehicle_title = product.title | default: '' | url_param_escape %}
+    {% assign vin = product.metafields.vin_decoder.vin | default: '' | url_param_escape %}
+    {% assign vehicle_image_url = '' %}
+    {% if product.featured_image %}
+      {% assign vehicle_image_url = product.featured_image | image_url: width: 400 | url_param_escape %}
+    {% endif %}
+    {% assign add_url = '/cart/add?id=' | append: variant_id | append: '&quantity=1' %}
+    {% assign add_url = add_url | append: '&properties[Vehicle]=' | append: vehicle_title %}
+    {% assign add_url = add_url | append: '&properties[VIN]=' | append: vin %}
+    {% if vehicle_image_url != blank %}
+      {% assign add_url = add_url | append: '&properties[_vehicle_image]=' | append: vehicle_image_url %}
+    {% endif %}
+    {% if section != blank %}
+      <style>
+        #MainProduct-{{ section.id }} .product-form__submit,
+        #MainProduct-{{ section.id }} .shopify-payment-button,
+        #MainProduct-{{ section.id }} .price__badge-sold-out { display: none !important; }
+      </style>
+    {% endif %}
+    <div class="vehicle-hold-button" {{ block.shopify_attributes }}>
+      <a href="{{ add_url }}" class="vehicle-hold-button__link button button--full-width button--primary">
+        {{ label }}
+      </a>
+      <p class="vehicle-hold-button__note caption">$1,000 hold for 3 days. Applied to purchase.</p>
+    </div>
+  {% endif %}
+{% endif %}

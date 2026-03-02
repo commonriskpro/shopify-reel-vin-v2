@@ -1,0 +1,103 @@
+.icon-cards {
+  background: rgb(var(--color-background));
+}
+
+.icon-cards__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media screen and (max-width: 749px) {
+  .icon-cards__list--horizontal .icon-cards__item {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+}
+
+@media screen and (min-width: 750px) {
+  .icon-cards__list--horizontal .icon-cards__item {
+    flex: 1 1 33.33%;
+    min-width: 0;
+    max-width: 33.33%;
+  }
+}
+
+/* macOS-style card: rounded, soft shadow, no harsh borders */
+.icon-cards__item {
+  border: none;
+  border-radius: 12px;
+  background: rgba(var(--color-foreground), 0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.icon-cards__link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem 1.5rem;
+  text-decoration: none;
+  color: rgb(var(--color-foreground));
+  min-height: 10rem;
+  transition: background-color 0.2s ease;
+  border-radius: 12px;
+}
+
+.icon-cards__link:hover {
+  background: rgba(var(--color-foreground), 0.06);
+}
+
+.icon-cards__item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  background: rgba(var(--color-foreground), 0.05);
+}
+
+.icon-cards__link:focus-visible {
+  outline: 0.2rem solid rgba(var(--color-foreground), 0.5);
+  outline-offset: 0.2rem;
+}
+
+/* macOS-style icon: rounded container with soft fill (SF symbol style) */
+.icon-cards__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 10px;
+  background: rgba(var(--color-foreground), 0.08);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.icon-cards__link:hover .icon-cards__icon {
+  background: rgba(var(--color-foreground), 0.12);
+}
+
+.icon-cards__icon .icon,
+.icon-cards__icon .svg-wrapper {
+  color: rgb(var(--color-foreground));
+}
+
+.icon-cards__icon .icon {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.icon-cards__icon svg {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+/* SF Pro–style label */
+.icon-cards__label {
+  font-size: 1.35rem;
+  font-weight: 500;
+  text-align: center;
+  letter-spacing: -0.01em;
+}

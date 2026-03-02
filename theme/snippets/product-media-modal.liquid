@@ -1,0 +1,66 @@
+{% comment %}
+  Renders a product media modal. Also see 'product-media-gallery'
+
+  Accepts:
+  - product: {Object} Product liquid object
+  - variant_images: {Array} Product images associated with a variant
+
+  Usage:
+  {% render 'product-media-modal' %}
+{% endcomment %}
+
+<product-modal id="ProductModal-{{ section.id }}" class="product-media-modal media-modal" data-media-count="{{ product.media.size }}">
+  <div
+    class="product-media-modal__dialog product-media-modal__dialog--dark"
+    role="dialog"
+    aria-label="{{ 'products.modal.label' | t }}"
+    aria-modal="true"
+    tabindex="-1"
+  >
+    <button
+      id="ModalClose-{{ section.id }}"
+      type="button"
+      class="product-media-modal__close"
+      aria-label="{{ 'accessibility.close' | t }}"
+    >
+      {{ 'accessibility.close' | t }}
+    </button>
+
+    <button type="button" class="product-media-modal__arrow product-media-modal__arrow--prev" aria-label="Previous image">
+      {{ 'icon-chevron-left.svg' | inline_asset_content }}
+    </button>
+    <button type="button" class="product-media-modal__arrow product-media-modal__arrow--next" aria-label="Next image">
+      {{ 'icon-chevron-right.svg' | inline_asset_content }}
+    </button>
+
+    <div
+      class="product-media-modal__content"
+      role="document"
+      aria-label="{{ 'products.modal.label' | t }}"
+      tabindex="0"
+    >
+      {%- liquid
+        if product.selected_or_first_available_variant.featured_media != null
+          assign media = product.selected_or_first_available_variant.featured_media
+          render 'product-media', media: media, loop: section.settings.enable_video_looping, variant_image: section.settings.hide_variants
+        endif
+      -%}
+
+      {%- for media in product.media -%}
+        {%- liquid
+          if section.settings.hide_variants and variant_images contains media.src or variant_images contains media.id
+            assign variant_image = true
+          else
+            assign variant_image = false
+          endif
+
+          unless media.id == product.selected_or_first_available_variant.featured_media.id
+            render 'product-media', media: media, loop: section.settings.enable_video_looping, variant_image: variant_image
+          endunless
+        -%}
+      {%- endfor -%}
+    </div>
+
+    <div class="product-media-modal__counter" aria-live="polite">1 of {{ product.media.size }}</div>
+  </div>
+</product-modal>

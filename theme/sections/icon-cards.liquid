@@ -1,0 +1,149 @@
+{{ 'section-icon-cards.css' | asset_url | stylesheet_tag }}
+
+{%- style -%}
+  .section-{{ section.id }}-padding {
+    padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+    padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+  }
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top }}px;
+      padding-bottom: {{ section.settings.padding_bottom }}px;
+    }
+  }
+{%- endstyle -%}
+
+{%- liquid
+  assign icon_map = 'truck' | split: ','
+  assign block_icons = 'truck,phone,map-pin' | split: ','
+-%}
+
+<div class="icon-cards color-{{ section.settings.color_scheme }} gradient">
+  <div class="page-width section-{{ section.id }}-padding">
+    <ul class="icon-cards__list icon-cards__list--horizontal grid grid--1-col grid--3-col-tablet" role="list">
+      {%- for block in section.blocks -%}
+        <li class="icon-cards__item grid__item" {{ block.shopify_attributes }}>
+          <a
+            href="{{ block.settings.link | default: '#' }}"
+            class="icon-cards__link"
+            {% if block.settings.link == blank %}aria-disabled="true"{% endif %}
+          >
+            <span class="icon-cards__icon">
+              {%- case block.settings.icon -%}
+                {%- when 'truck' -%}
+                  <span class="svg-wrapper">{{ 'icon-truck.svg' | inline_asset_content }}</span>
+                {%- when 'phone' -%}
+                  <span class="svg-wrapper">{{ 'icon-phone.svg' | inline_asset_content }}</span>
+                {%- when 'map-pin' -%}
+                  <span class="svg-wrapper">{{ 'icon-map-pin.svg' | inline_asset_content }}</span>
+                {%- else -%}
+                  <span class="svg-wrapper">{{ 'icon-truck.svg' | inline_asset_content }}</span>
+              {%- endcase -%}
+            </span>
+            <span class="icon-cards__label">{{ block.settings.label | default: 'Label' }}</span>
+          </a>
+        </li>
+      {%- endfor -%}
+    </ul>
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "Icon cards",
+  "tag": "section",
+  "class": "section-icon-cards",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "Color scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "header",
+      "content": "Section padding"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Top padding",
+      "default": 36
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Bottom padding",
+      "default": 36
+    }
+  ],
+  "blocks": [
+    {
+      "type": "card",
+      "name": "Card",
+      "settings": [
+        {
+          "type": "select",
+          "id": "icon",
+          "label": "Icon",
+          "options": [
+            { "value": "truck", "label": "Car / Inventory" },
+            { "value": "phone", "label": "Phone" },
+            { "value": "map-pin", "label": "Location" }
+          ],
+          "default": "truck"
+        },
+        {
+          "type": "text",
+          "id": "label",
+          "label": "Label"
+        },
+        {
+          "type": "url",
+          "id": "link",
+          "label": "Link"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Icon cards",
+      "blocks": [
+        {
+          "type": "card",
+          "settings": {
+            "icon": "truck",
+            "label": "Latest Inventory"
+          }
+        },
+        {
+          "type": "card",
+          "settings": {
+            "icon": "phone",
+            "label": "Call Now"
+          }
+        },
+        {
+          "type": "card",
+          "settings": {
+            "icon": "map-pin",
+            "label": "Visit Our Shops"
+          }
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,11 @@
+{
+  "name": "vin-decoder-action",
+  "private": true,
+  "version": "1.0.0",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@shopify/ui-extensions": "~2025.10.0",
+    "lru-cache": "^11.2.6",
+    "preact": "^10.10.x"
+  }
+}

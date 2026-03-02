@@ -1,0 +1,40 @@
+{% comment %}
+  VIN Decoder app – vehicle title type badge for product cards.
+  Shows "ON HOLD" when product has tag "on-hold" (set after customer pays for reserve).
+  Shows "Clean" when product.metafields.vin_decoder.title_status is "Clean".
+  Uses a rectangle (no rotation) so it isn't clipped by the card's overflow: hidden.
+{% endcomment %}
+{% assign on_hold = false %}
+{% if product.tags contains 'on-hold' %}
+  {% assign on_hold = true %}
+{% endif %}
+{% assign title_type = product.metafields.vin_decoder.title_status | strip %}
+<style>
+  .vehicle-title-ribbon {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 0.5em 1em;
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #fff;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    z-index: 2;
+  }
+  .vehicle-title-ribbon--clean {
+    background: #2563eb;
+  }
+  .vehicle-title-ribbon--on-hold {
+    background: #b45309;
+  }
+</style>
+{% if on_hold %}
+  <span class="vehicle-title-ribbon vehicle-title-ribbon--on-hold" aria-label="On hold">ON HOLD</span>
+{% elsif title_type == 'Clean' %}
+  <span class="vehicle-title-ribbon vehicle-title-ribbon--clean" aria-label="Title: Clean">Clean</span>
+{% endif %}

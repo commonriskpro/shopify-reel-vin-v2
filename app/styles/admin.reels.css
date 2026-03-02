@@ -1,0 +1,412 @@
+/* Shoppable Reels admin page – extracted from inline styles */
+@import "./admin-tokens.css";
+
+.reels-ui-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--admin-space-base);
+}
+
+.reels-connections {
+  display: grid;
+  gap: var(--admin-space-md);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.reels-connection-card {
+  background: var(--admin-color-surface);
+  border: 1px solid var(--admin-color-border);
+  border-radius: var(--admin-radius-lg);
+  padding: 14px var(--admin-space-base);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--admin-space-md);
+  transition: box-shadow var(--admin-duration-fast) var(--admin-ease);
+}
+
+.reels-connection-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.reels-connection-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reels-platform-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--admin-radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid #dadbdd;
+  color: var(--admin-color-text);
+  background: var(--admin-color-surface-subtle);
+}
+
+.reels-platform-icon--instagram {
+  color: #a33474;
+}
+
+.reels-platform-icon--tiktok {
+  color: #111;
+}
+
+.reels-connection-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reels-connection-title {
+  font-weight: 700;
+  color: var(--admin-color-text);
+  font-size: 14px;
+}
+
+.reels-connection-subtitle {
+  color: var(--admin-color-text-secondary);
+  font-size: 13px;
+}
+
+.reels-connection-btn {
+  border: 1px solid var(--admin-color-border-strong);
+  border-radius: 10px;
+  background: var(--admin-color-surface);
+  padding: var(--admin-space-sm) 13px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--admin-duration-fast) var(--admin-ease),
+    border-color var(--admin-duration-fast) var(--admin-ease);
+}
+
+.reels-connection-btn:hover:not(:disabled) {
+  background: var(--admin-color-surface-subtle);
+}
+
+.reels-connection-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.reels-connection-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.reels-connection-btn--dark {
+  background: #111317;
+  color: #fff;
+  border-color: #111317;
+}
+
+.reels-connection-btn--dark:hover:not(:disabled) {
+  background: #1d1f24;
+}
+
+.reels-gallery {
+  background: var(--admin-color-surface);
+  border: 1px solid var(--admin-color-border);
+  border-radius: var(--admin-radius-xl);
+  padding: var(--admin-space-base);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.reels-gallery-title {
+  font-weight: 700;
+  font-size: 22px;
+  margin: 0;
+  color: var(--admin-color-text);
+}
+
+.reels-gallery-subtitle {
+  margin: 0;
+  color: var(--admin-color-text-secondary);
+  font-size: 13px;
+}
+
+.reels-grid {
+  display: grid;
+  gap: 14px;
+  align-items: stretch;
+  width: 100%;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+}
+
+.reel-ui-card {
+  background: var(--admin-color-surface);
+  border: 1px solid #dfdfdf;
+  border-radius: var(--admin-radius-lg);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 560px;
+  height: 100%;
+  transition: box-shadow var(--admin-duration-normal) var(--admin-ease);
+}
+
+.reel-ui-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.reel-ui-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reel-ui-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #3d3f43;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reel-ui-handle {
+  color: var(--admin-color-text-muted);
+  letter-spacing: -1px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.reel-ui-platform-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #a33474;
+  background: #f9eef5;
+  border: 1px solid #f1d4e4;
+}
+
+.reel-ui-trash {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #a24545;
+  font-size: 14px;
+  padding: 4px;
+  border-radius: var(--admin-radius-sm);
+  transition: background var(--admin-duration-fast) var(--admin-ease);
+}
+
+.reel-ui-trash:hover {
+  background: rgba(162, 69, 69, 0.1);
+}
+
+.reel-ui-trash:focus-visible {
+  outline: 2px solid #a24545;
+  outline-offset: 2px;
+}
+
+.reel-ui-trash--muted {
+  opacity: 0.35;
+}
+
+.reel-ui-thumb-wrap {
+  position: relative;
+  border-radius: var(--admin-radius-lg);
+  overflow: hidden;
+  background: #f4f4f5;
+  aspect-ratio: 9 / 16;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reel-ui-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.reel-ui-empty {
+  color: #8c9196;
+  font-size: 13px;
+}
+
+.reel-ui-play {
+  position: absolute;
+  inset: auto auto 50% 50%;
+  transform: translate(-50%, 50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  color: #25272b;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  font-size: 16px;
+}
+
+.reel-ui-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--admin-space-sm);
+}
+
+.reel-ui-home-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #4f5257;
+  cursor: pointer;
+}
+
+.reel-ui-home-toggle:focus-visible {
+  outline: 2px solid var(--admin-color-text);
+  outline-offset: 2px;
+  border-radius: var(--admin-radius-sm);
+}
+
+.reel-ui-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: var(--admin-space-sm);
+  margin-top: auto;
+}
+
+.reel-ui-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--admin-color-text-secondary);
+}
+
+.reel-ui-tag-list {
+  margin-top: var(--admin-space-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reel-ui-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  background: var(--admin-color-surface-subtle);
+  border-radius: var(--admin-radius-sm);
+  font-size: 11px;
+}
+
+.reel-ui-tag-remove {
+  border: none;
+  background: transparent;
+  color: #c73535;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.reel-ui-tag-remove:focus-visible {
+  outline: 2px solid #c73535;
+  outline-offset: 1px;
+}
+
+.reel-ui-handle-form {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.reel-ui-handle-input {
+  min-width: 160px;
+  flex: 1;
+  border: 1px solid #c9cccf;
+  border-radius: var(--admin-radius-md);
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.reel-ui-handle-btn {
+  border: 1px solid #c9cccf;
+  border-radius: var(--admin-radius-md);
+  background: var(--admin-color-surface);
+  padding: 7px 11px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--admin-duration-fast) var(--admin-ease);
+}
+
+.reel-ui-handle-btn:hover {
+  background: var(--admin-color-surface-subtle);
+}
+
+/* Homepage toggle row (replaces inline style) */
+.reels-homepage-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.reels-homepage-toggle-row[aria-busy="true"] {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.reels-homepage-toggle-row:focus-visible {
+  outline: 2px solid var(--admin-color-text);
+  outline-offset: 2px;
+  border-radius: var(--admin-radius-sm);
+}
+
+.reels-homepage-toggle-label {
+  font-size: 14px;
+  color: var(--admin-color-text);
+}
+
+.reels-homepage-toggle-desc {
+  margin: var(--admin-space-sm) 0 0;
+  font-size: 13px;
+  color: var(--admin-color-text-secondary);
+}
+
+.reels-link-underline {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.reels-link-underline:hover {
+  text-decoration: none;
+}
+
+/* Empty state when no reels */
+.reels-empty-state {
+  padding: var(--admin-space-lg) var(--admin-space-base);
+  background: var(--admin-color-surface-subtle);
+  border-radius: var(--admin-radius-lg);
+  border: 1px dashed var(--admin-color-border);
+}
+
+.reels-empty-state-heading {
+  margin: 0 0 var(--admin-space-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--admin-color-text);
+}
+
+.reels-empty-state-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--admin-color-text-secondary);
+  line-height: 1.5;
+}

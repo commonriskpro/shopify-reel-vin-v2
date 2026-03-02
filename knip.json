@@ -1,0 +1,40 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema-jsonc.json",
+  "workspaces": {
+    ".": {
+      "entry": [
+        "app/routes/**/*.{js,jsx,ts,tsx}",
+        "middleware.js",
+        "theme/assets/**/*.js"
+      ],
+      "project": [
+        "app/**/*.{js,jsx,ts,tsx}",
+        "theme/assets/**/*.js",
+        "*.js"
+      ],
+      "ignore": [
+        ".shopify/**"
+      ]
+    },
+    "instagram-reels-api": {
+      "entry": [
+        "api/**/*.js"
+      ],
+      "project": [
+        "**/*.js"
+      ]
+    },
+    "extensions/vin-decoder-action": {
+      "entry": [
+        "src/ActionExtension.jsx"
+      ],
+      "project": [
+        "src/**/*.{js,jsx,ts,tsx}"
+      ]
+    }
+  },
+  "ignoreDependencies": [
+    "@shopify/plugin-cloudflare",
+    "sharp"
+  ]
+}

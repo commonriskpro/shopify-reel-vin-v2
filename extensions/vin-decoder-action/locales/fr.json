@@ -1,0 +1,11 @@
+{
+  "name": "Décodeur VIN",
+  "welcome": "Bienvenue dans l'extension {{target}} !",
+  "heading": "Décodeur VIN",
+  "description": "Décodez un VIN et appliquez éventuellement le titre (année, marque, modèle, finition) à ce produit.",
+  "currentProduct": "Titre du produit actuel",
+  "vinLabel": "VIN",
+  "decode": "Décoder",
+  "applyToProduct": "Appliquer au produit",
+  "close": "Fermer"
+}
