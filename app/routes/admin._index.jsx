@@ -9,7 +9,6 @@ import { decodeVin, vehicleTitleFromDecoded } from "../services/vins.server.js";
 import { createProductFromVin } from "../services/products.server.js";
 import { enforceRateLimit, isValidVin, normalizeVin } from "../security.server.js";
 import { getWarnings } from "../lib/api-client.js";
-import { useApiClient } from "../lib/api.client.js";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -19,6 +18,7 @@ export const loader = async ({ request }) => {
 const actionBodySchema = z.object({
   title: z.string().optional(),
   vin: z.string().optional(),
+  decodeOnly: z.boolean().optional(),
   decodeAndCreateDraft: z.boolean().optional(),
   titleStatus: z.string().optional(),
   mileage: z.union([z.string(), z.number()]).optional(),
@@ -49,8 +49,41 @@ export const action = async ({ request }) => {
   if (!bodyParse.success) {
     return Response.json({ error: "Validation failed" }, { status: 400 });
   }
-  const { title: lineTitle, vin, decodeAndCreateDraft, titleStatus, mileage } = bodyParse.data;
+  const { title: lineTitle, vin, decodeOnly, decodeAndCreateDraft, titleStatus, mileage } = bodyParse.data;
   const normalizedVin = normalizeVin(vin);
+
+  // ── Pure VIN decode (no product creation) ────────────────────────────────
+  // Used by the "Decode VIN" button via useFetcher; eliminates the need for
+  // a separate /api/vins endpoint and the App Bridge token race condition.
+  if (decodeOnly) {
+    if (!normalizedVin || !isValidVin(normalizedVin)) {
+      return Response.json({ ok: false, error: { message: "Please provide a valid VIN (8–17 characters).", code: "VALIDATION" } }, { status: 400 });
+    }
+    const limited = enforceRateLimit(request, {
+      scope: "admin._index.decode-only",
+      limit: 30,
+      windowMs: 60_000,
+      keyParts: [session?.shop || "unknown"],
+    });
+    if (!limited.ok) {
+      return Response.json(
+        { ok: false, error: { message: "Too many VIN decode requests. Please try again shortly.", code: "RATE_LIMIT" } },
+        { status: 429, headers: { "Retry-After": String(limited.retryAfterSeconds) } }
+      );
+    }
+    try {
+      const { decoded, raw } = await decodeVin(normalizedVin);
+      return Response.json({ ok: true, data: { decoded, raw } });
+    } catch (err) {
+      logServerError("admin._index.decodeOnly", err, { shop: session?.shop });
+      const msg = err?.message ?? "Failed to decode VIN.";
+      const isNotFound = msg.includes("No decode results");
+      return Response.json(
+        { ok: false, error: { message: isNotFound ? "No decode results found for this VIN." : msg, code: isNotFound ? "NOT_FOUND" : "VPIC_ERROR" } },
+        { status: isNotFound ? 404 : 502 }
+      );
+    }
+  }
   if (normalizedVin && !isValidVin(normalizedVin)) {
     return Response.json({ error: "Please provide a valid VIN (8-17 characters)." }, { status: 400 });
   }
@@ -136,7 +169,6 @@ export const action = async ({ request }) => {
 };
 
 const VIN_LENGTH = 17;
-const DECODE_API = "/api/vins";
 
 function DecodedResult({ data, onCreateDraft, onOpenDraft, draftFetcher }) {
   const d = data?.decoded;
@@ -210,31 +242,38 @@ function productAdminUrl(shop, productIdGid) {
 
 export default function Index() {
   const { shop } = useLoaderData() ?? {};
-  const { apiGet } = useApiClient();
   const [vin, setVin] = useState("");
   const [createdProducts, setCreatedProducts] = useState([]);
-  const [decodeLoading, setDecodeLoading] = useState(false);
-  const [decodeResult, setDecodeResult] = useState(null);
   const shopify = useAppBridge();
+  // decodeFetcher: pure VIN decode (decodeOnly: true) — no product created
+  const decodeFetcher = useFetcher();
+  // draftFetcher: decodeAndCreateDraft or create product from pre-decoded data
   const draftFetcher = useFetcher();
-  const isLoading = decodeLoading;
-  const decodeError = decodeResult?.ok === false ? decodeResult?.error?.message : null;
-  const decodeRequestId = decodeResult?.ok === false ? decodeResult?.meta?.requestId : null;
-  const draftError = typeof draftFetcher.data?.error === "string" ? draftFetcher.data.error : draftFetcher.data?.error?.message;
+  const isLoading = decodeFetcher.state !== "idle";
+  const decodeError =
+    decodeFetcher.data && !decodeFetcher.data.ok
+      ? (decodeFetcher.data.error?.message ?? "Decode failed")
+      : null;
+  const decodeRequestId =
+    decodeFetcher.data && !decodeFetcher.data.ok
+      ? decodeFetcher.data.meta?.requestId
+      : null;
+  const draftError =
+    typeof draftFetcher.data?.error === "string"
+      ? draftFetcher.data.error
+      : draftFetcher.data?.error?.message;
   const error = decodeError || draftError;
 
-  const handleDecode = useCallback(async () => {
+  const handleDecode = useCallback(() => {
     const v = vin.trim().toUpperCase();
     if (v.length < 8) return;
-    setDecodeLoading(true);
-    setDecodeResult(null);
-    try {
-      const res = await apiGet(`${DECODE_API}?vin=${encodeURIComponent(v)}`);
-      setDecodeResult(res);
-    } finally {
-      setDecodeLoading(false);
-    }
-  }, [vin, apiGet]);
+    // Submit to THIS route's action with decodeOnly: true.
+    // authenticate.admin() resolves via session cookie — no App Bridge token needed.
+    decodeFetcher.submit(
+      { vin: v, decodeOnly: true },
+      { method: "POST", encType: "application/json" }
+    );
+  }, [vin, decodeFetcher]);
 
   const handleDecodeAndCreateDraft = () => {
     const v = vin.trim().toUpperCase();
@@ -245,7 +284,7 @@ export default function Index() {
     );
   };
 
-  const decodePayload = decodeResult?.ok === true ? decodeResult?.data : null;
+  const decodePayload = decodeFetcher.data?.ok === true ? decodeFetcher.data.data : null;
   const draftPayload = draftFetcher.data?.ok === true ? draftFetcher.data?.data : draftFetcher.data;
   const decodedData = decodePayload?.decoded
     ? { decoded: decodePayload.decoded, raw: decodePayload.raw }
@@ -318,10 +357,10 @@ export default function Index() {
           <s-button
             variant="primary"
             onClick={handleDecode}
-            disabled={vin.trim().length < 8 || isLoading}
+            disabled={vin.trim().length < 8 || isLoading || decodeFetcher.state !== "idle"}
             {...(isLoading ? { loading: true } : {})}
           >
-            Decode VIN
+            {isLoading ? "Decoding…" : "Decode VIN"}
           </s-button>
           <s-button
             variant="secondary"
@@ -335,9 +374,9 @@ export default function Index() {
         {error && (
           <s-banner tone="critical" slot="after">
             {error}
-            {(decodeRequestId || draftFetcher.data?.meta?.requestId) && (
+            {(decodeRequestId || draftFetcher.data?.meta?.requestId || draftFetcher.data?.requestId) && (
               <span style={{ display: "block", marginTop: "6px", fontSize: "12px", opacity: 0.9 }}>
-                Request ID: <code style={{ userSelect: "all", cursor: "text" }}>{decodeRequestId || draftFetcher.data?.meta?.requestId}</code>
+                Request ID: <code style={{ userSelect: "all", cursor: "text" }}>{decodeRequestId || draftFetcher.data?.meta?.requestId || draftFetcher.data?.requestId}</code>
               </span>
             )}
           </s-banner>

@@ -1,11 +1,8 @@
 /**
- * GET /api/vins?vin=XXX — Decode VIN. Always returns application/json.
+ * REMOVED: GET /api/vins
+ * Migrated to POST /admin/_index {vin, decodeOnly:true} (admin._index action).
+ * The "Decode VIN" button now uses useFetcher.submit against the admin route.
  */
-import { apiRoute } from "../lib/api.server.js";
-import { handleVinDecode } from "../services/vin-decode-handler.server.js";
-
-export const loader = apiRoute(({ request }) => handleVinDecode(request, { scope: "api.vins" }));
-
-export default function ApiVins() {
-  return null;
-}
+import { gone } from "../lib/api-gone.server.js";
+export const loader = gone("/api/vins", "POST /admin with {vin, decodeOnly:true}");
+export default function ApiVinsGone() { return null; }

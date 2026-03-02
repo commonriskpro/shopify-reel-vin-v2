@@ -1,5 +1,24 @@
+/**
+ * MediaPicker — file browser + upload widget for the embedded admin.
+ *
+ * All network calls go to /admin/media via React Router's useFetcher,
+ * which carries the Shopify session cookie automatically. No App Bridge
+ * token is required; the shop:null race condition cannot occur here.
+ *
+ * Props (unchanged from previous version):
+ *   productId          – GID of an existing product; if absent, media is "pending"
+ *   pendingMedia       – array of pending media items (pre-product-create)
+ *   onPendingMediaChange – setter for pending media
+ *   media              – controlled product media (from parent)
+ *   onMediaChange      – notified after product media changes
+ *   disabled           – disables all controls
+ */
 import { useEffect, useRef, useState } from "react";
-import { useApiClient, formatApiError } from "../lib/api.client.js";
+import { useFetcher } from "react-router";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function getPreviewUrl(node) {
   if (node?.image?.url) return node.image.url;
@@ -10,168 +29,324 @@ function getPreviewUrl(node) {
 
 function getDisplayUrl(item, isPending) {
   if (isPending) {
-    return item.previewUrl || (item.originalSource && item.originalSource.startsWith("http") ? item.originalSource : null);
+    return item.previewUrl || (item.originalSource?.startsWith?.("http") ? item.originalSource : null);
   }
   return getPreviewUrl(item);
 }
 
-function formatMediaPickerError(result) {
-  const msg = formatApiError(result);
-  return msg || null;
+function errorMsg(data) {
+  if (!data || data.ok) return null;
+  const msg = data.error?.message ?? data.error?.code ?? "Request failed";
+  const requestId = data.meta?.requestId;
+  return requestId ? `${msg} (Request ID: ${requestId})` : msg;
 }
 
-export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange, media, onMediaChange, disabled }) {
-  const { apiGet, apiPost } = useApiClient();
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export function MediaPicker({
+  productId,
+  pendingMedia = [],
+  onPendingMediaChange,
+  media,
+  onMediaChange,
+  disabled,
+}) {
+  // Four independent fetchers — one per operation class so they never block
+  // each other and state.data is unambiguous.
+  const productMediaFetcher = useFetcher(); // GET product-media
+  const filesFetcher = useFetcher();         // GET files list
+  const stagedFetcher = useFetcher();        // POST staged-uploads
+  const addMediaFetcher = useFetcher();      // POST add-product-media
 
   const fileInputRef = useRef(null);
   const modalRef = useRef(null);
-  const [selectModalOpen, setSelectModalOpen] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState(null);
-  const [uploadRequestId, setUploadRequestId] = useState(null);
 
+  // ---- UI state ----
+  const [selectModalOpen, setSelectModalOpen] = useState(false);
   const [filesState, setFilesState] = useState({
     loading: false,
     error: null,
     items: [],
     pageInfo: { hasNextPage: false, endCursor: null },
   });
-
   const [mediaData, setMediaData] = useState(null);
-  const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaLoadError, setMediaLoadError] = useState(null);
   const [mediaLoadRequestId, setMediaLoadRequestId] = useState(null);
 
+  // ---- Upload chain state machine ----
+  // Phases: "idle" | "awaiting-staged" | "uploading-s3" | "awaiting-add-media"
+  const [uploadPhase, setUploadPhase] = useState("idle");
+  const [uploadError, setUploadError] = useState(null);
+  const [uploadRequestId, setUploadRequestId] = useState(null);
+  const uploadJobRef = useRef(null);
+  // { file, mime, isVideo, alt, target? }
+
+  // Track whether filesFetcher is in "load more" (append) vs fresh load mode
+  const filesAppendRef = useRef(false);
+
+  // ---------------------------------------------------------------------------
+  // Derived values
+  // ---------------------------------------------------------------------------
+
   const hasProductId = Boolean(productId);
-  const savedMedia = (media && media.length) ? media : (mediaData?.ok === true ? mediaData?.data?.media : mediaData?.media) ?? [];
-  const currentMedia = hasProductId ? savedMedia : pendingMedia;
+  const savedMedia =
+    media && media.length
+      ? media
+      : mediaData?.ok === true
+      ? mediaData.data?.media
+      : null;
+  const currentMedia = hasProductId ? savedMedia ?? [] : pendingMedia;
   const isPendingMode = !hasProductId;
   const mediaLoadFailed = mediaData?.ok === false;
   const mediaLoadIsNotFound = mediaData?.error?.code === "NOT_FOUND";
+  const uploading = uploadPhase !== "idle";
 
+  // ---------------------------------------------------------------------------
+  // Effects: product media
+  // ---------------------------------------------------------------------------
+
+  // Initial load when productId is available
   useEffect(() => {
-    if (hasProductId && productId) {
-      let cancelled = false;
-      setMediaLoading(true);
-      setMediaLoadError(null);
-      apiGet(`/api/products/${encodeURIComponent(productId)}/media`).then((result) => {
-        if (cancelled) return;
-        setMediaLoading(false);
-        setMediaData(result);
-        if (result?.ok === false) setMediaLoadError(formatMediaPickerError(result));
-        if (result?.meta?.requestId) setMediaLoadRequestId(result.meta.requestId);
-      });
-      return () => { cancelled = true; };
-    }
+    if (!hasProductId || !productId) return;
+    productMediaFetcher.load(
+      `/admin/media?intent=product-media&productId=${encodeURIComponent(productId)}`
+    );
+    // productMediaFetcher.load is stable; productId/hasProductId are the real deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasProductId, productId]);
 
+  // Sync fetcher data → local state
+  useEffect(() => {
+    if (productMediaFetcher.state !== "idle") return;
+    if (!productMediaFetcher.data) return;
+    const data = productMediaFetcher.data;
+    setMediaData(data);
+    if (!data.ok) {
+      setMediaLoadError(errorMsg(data));
+      if (data.meta?.requestId) setMediaLoadRequestId(data.meta.requestId);
+    }
+  }, [productMediaFetcher.state, productMediaFetcher.data]);
+
+  // ---------------------------------------------------------------------------
+  // Effects: files list
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (filesFetcher.state !== "idle") return;
+    if (!filesFetcher.data) return;
+    const data = filesFetcher.data;
+    setFilesState((prev) => {
+      if (!data.ok) {
+        return { ...prev, loading: false, error: errorMsg(data) || "Failed to load files" };
+      }
+      const rawItems = data.data?.items ?? [];
+      const newItems = rawItems.map((it) => ({
+        ...it,
+        mediaContentType: it.mediaContentType ?? it.type ?? "IMAGE",
+      }));
+      const pageInfo = data.data?.pageInfo ?? { hasNextPage: false, endCursor: null };
+      return {
+        loading: false,
+        error: null,
+        items: filesAppendRef.current ? [...prev.items, ...newItems] : newItems,
+        pageInfo,
+      };
+    });
+    filesAppendRef.current = false;
+  }, [filesFetcher.state, filesFetcher.data]);
+
+  // ---------------------------------------------------------------------------
+  // Effects: upload chain — step 1 result (staged upload) → trigger S3 upload
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (uploadPhase !== "awaiting-staged") return;
+    if (stagedFetcher.state !== "idle") return;
+    if (!stagedFetcher.data) return;
+
+    const data = stagedFetcher.data;
+    if (!data.ok) {
+      setUploadError(errorMsg(data) || "Failed to get upload URL");
+      if (data.meta?.requestId) setUploadRequestId(data.meta.requestId);
+      setUploadPhase("idle");
+      uploadJobRef.current = null;
+      return;
+    }
+
+    const target = data.data?.stagedTargets?.[0];
+    if (!target?.url) {
+      setUploadError("No upload target returned");
+      setUploadPhase("idle");
+      uploadJobRef.current = null;
+      return;
+    }
+
+    // Store target and advance phase so the S3 upload effect fires
+    uploadJobRef.current = { ...uploadJobRef.current, target };
+    setUploadPhase("uploading-s3");
+  }, [uploadPhase, stagedFetcher.state, stagedFetcher.data]);
+
+  // Upload chain — step 2: push the file to the S3 staged target URL
+  useEffect(() => {
+    if (uploadPhase !== "uploading-s3") return;
+    const job = uploadJobRef.current;
+    if (!job?.target || !job?.file) return;
+
+    (async () => {
+      try {
+        const formData = new FormData();
+        (job.target.parameters || []).forEach((p) => formData.append(p.name, p.value));
+        formData.append("file", job.file);
+        // Direct upload to the external S3/GCS URL — no auth headers needed
+        const res = await fetch(job.target.url, { method: "POST", body: formData });
+        if (!res.ok) throw new Error("File upload to storage failed");
+
+        if (isPendingMode && onPendingMediaChange) {
+          // Pending mode: stage the media reference locally; no API call needed
+          const previewUrl = job.file.type.startsWith("image/")
+            ? URL.createObjectURL(job.file)
+            : undefined;
+          onPendingMediaChange([
+            ...pendingMedia,
+            {
+              originalSource: job.target.resourceUrl,
+              mediaContentType: job.isVideo ? "VIDEO" : "IMAGE",
+              alt: job.alt,
+              previewUrl,
+            },
+          ]);
+          setUploadPhase("idle");
+          uploadJobRef.current = null;
+        } else if (hasProductId && productId) {
+          // Product mode: attach the uploaded file to the product
+          setUploadPhase("awaiting-add-media");
+          addMediaFetcher.submit(
+            {
+              intent: "add-product-media",
+              productId,
+              media: [
+                {
+                  originalSource: job.target.resourceUrl,
+                  mediaContentType: job.isVideo ? "VIDEO" : "IMAGE",
+                  alt: job.alt,
+                },
+              ],
+            },
+            { method: "POST", encType: "application/json" }
+          );
+        } else {
+          setUploadPhase("idle");
+          uploadJobRef.current = null;
+        }
+      } catch (err) {
+        setUploadError(err?.message || "Upload failed");
+        setUploadPhase("idle");
+        uploadJobRef.current = null;
+      }
+    })();
+    // Only re-run when phase transitions to "uploading-s3"
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadPhase]);
+
+  // Upload chain — step 3 result: add-product-media complete → refresh product media
+  useEffect(() => {
+    if (uploadPhase !== "awaiting-add-media") return;
+    if (addMediaFetcher.state !== "idle") return;
+    if (!addMediaFetcher.data) return;
+
+    const data = addMediaFetcher.data;
+    if (!data.ok) {
+      setUploadError(errorMsg(data) || "Failed to add media to product");
+      if (data.meta?.requestId) setUploadRequestId(data.meta.requestId);
+    } else {
+      onMediaChange?.(data.data?.media ?? []);
+    }
+
+    setUploadPhase("idle");
+    uploadJobRef.current = null;
+
+    // Refresh the product media panel regardless of error (server might have partial success)
+    if (productId) {
+      productMediaFetcher.load(
+        `/admin/media?intent=product-media&productId=${encodeURIComponent(productId)}`
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadPhase, addMediaFetcher.state, addMediaFetcher.data]);
+
+  // Also handle add-media results that come from handlePickFile (not the upload chain)
+  useEffect(() => {
+    if (uploadPhase !== "idle") return; // Upload chain handles its own phase
+    if (addMediaFetcher.state !== "idle") return;
+    if (!addMediaFetcher.data) return;
+
+    const data = addMediaFetcher.data;
+    if (data.ok) {
+      onMediaChange?.(data.data?.media ?? []);
+      if (productId) {
+        productMediaFetcher.load(
+          `/admin/media?intent=product-media&productId=${encodeURIComponent(productId)}`
+        );
+      }
+    }
+    // Errors from pick-file are silently dropped here; the UI doesn't show them
+    // currently (unlike upload errors). Can be added if needed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addMediaFetcher.state, addMediaFetcher.data]);
+
+  // Keep the files modal open in sync with the modal ref
   useEffect(() => {
     if (selectModalOpen && modalRef.current?.showOverlay) {
       modalRef.current.showOverlay();
     }
   }, [selectModalOpen]);
 
+  // ---------------------------------------------------------------------------
+  // Handlers
+  // ---------------------------------------------------------------------------
+
   const handleUploadNew = () => {
     if (disabled) return;
-    if (isPendingMode || hasProductId) fileInputRef.current?.click();
+    fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (e) => {
+  const handleFileChange = (e) => {
     const file = e.target?.files?.[0];
     if (!file) return;
     e.target.value = "";
     setUploadError(null);
     setUploadRequestId(null);
-    setUploading(true);
-    try {
-      const mime = file.type || "image/jpeg";
-      const stagedResult = await apiPost("/api/staged-uploads", {
-        files: [{ filename: file.name, mimeType: mime, fileSize: String(file.size) }],
-      });
-      if (!stagedResult.ok) {
-        setUploadRequestId(stagedResult.meta?.requestId);
-        throw new Error(stagedResult.error?.message ?? "Failed to get upload URL");
-      }
-      const stagedTargets = stagedResult.data?.stagedTargets ?? [];
-      const target = stagedTargets[0];
-      if (!target?.url) {
-        throw new Error("No upload target returned");
-      }
 
-      const formData = new FormData();
-      (target.parameters || []).forEach((p) => formData.append(p.name, p.value));
-      formData.append("file", file);
-      const uploadRes = await fetch(target.url, {
-        method: "POST",
-        body: formData,
-      });
-      if (!uploadRes.ok) {
-        throw new Error("Upload failed");
-      }
+    const mime = file.type || "image/jpeg";
+    const isVideo = file.type.startsWith("video/");
+    const alt = file.name;
 
-      const isVideo = file.type.startsWith("video/");
-      const mediaContentType = isVideo ? "VIDEO" : "IMAGE";
-      const alt = file.name;
+    uploadJobRef.current = { file, mime, isVideo, alt };
+    setUploadPhase("awaiting-staged");
 
-      if (isPendingMode && onPendingMediaChange) {
-        const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
-        onPendingMediaChange([
-          ...pendingMedia,
-          { originalSource: target.resourceUrl, mediaContentType, alt, previewUrl },
-        ]);
-      } else if (hasProductId && productId) {
-        const addResult = await apiPost(`/api/products/${encodeURIComponent(productId)}/media`, {
-          media: [{ originalSource: target.resourceUrl, mediaContentType, alt }],
-        });
-        if (!addResult.ok) {
-          setUploadRequestId(addResult.meta?.requestId);
-          throw new Error(addResult.error?.message ?? "Failed to add media");
-        }
-        const addedMedia = addResult.data?.media ?? [];
-        onMediaChange?.(addedMedia);
-        const refresh = await apiGet(`/api/products/${encodeURIComponent(productId)}/media`);
-        setMediaData(refresh);
-      }
-    } catch (err) {
-      setUploadError(err?.message || "Upload failed");
-    } finally {
-      setUploading(false);
-    }
+    stagedFetcher.submit(
+      { intent: "staged-uploads", files: [{ filename: file.name, mimeType: mime, fileSize: String(file.size) }] },
+      { method: "POST", encType: "application/json" }
+    );
   };
 
   const handleSelectExisting = () => {
     if (disabled) return;
     setSelectModalOpen(true);
     setFilesState((prev) => ({ ...prev, loading: true, error: null, items: [] }));
-    apiGet("/api/files?first=30")
-      .then((result) => {
-        if (result.ok && result.data) {
-          const rawItems = result.data?.items ?? result.data?.files ?? result.data?.nodes ?? [];
-          const items = rawItems.map((it) => ({ ...it, mediaContentType: it.mediaContentType ?? it.type ?? "IMAGE" }));
-          const pageInfo = result.data?.pageInfo ?? { hasNextPage: false, endCursor: null };
-          setFilesState({ loading: false, error: null, items, pageInfo });
-        } else {
-          setFilesState((prev) => ({
-            ...prev,
-            loading: false,
-            error: formatMediaPickerError(result) || "Failed to load files",
-          }));
-        }
-      })
-      .catch((e) => {
-        setFilesState((prev) => ({ ...prev, loading: false, error: e?.message ?? "Failed to load files" }));
-      });
+    filesAppendRef.current = false;
+    filesFetcher.load("/admin/media?intent=files&first=30");
   };
 
   const handleRemovePending = (index) => {
     const item = pendingMedia[index];
-    if (item?.previewUrl && item.previewUrl.startsWith("blob:")) {
-      URL.revokeObjectURL(item.previewUrl);
-    }
+    if (item?.previewUrl?.startsWith?.("blob:")) URL.revokeObjectURL(item.previewUrl);
     onPendingMediaChange?.(pendingMedia.filter((_, i) => i !== index));
   };
 
-  const handlePickFile = async (file) => {
+  const handlePickFile = (file) => {
     if (!file?.url) return;
     if (isPendingMode && onPendingMediaChange) {
       onPendingMediaChange([
@@ -187,16 +362,21 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
       return;
     }
     if (!hasProductId || !productId) return;
-    const addResult = await apiPost(`/api/products/${encodeURIComponent(productId)}/media`, {
-      media: [
-        { originalSource: file.url, mediaContentType: file.mediaContentType || "IMAGE", alt: file.alt },
-      ],
-    });
-    if (addResult.ok && addResult.data?.media) {
-      onMediaChange?.(addResult.data.media);
-      const refresh = await apiGet(`/api/products/${encodeURIComponent(productId)}/media`);
-      setMediaData(refresh);
-    }
+    // Attach existing file to product — result handled by the "pick-file" effect above
+    addMediaFetcher.submit(
+      {
+        intent: "add-product-media",
+        productId,
+        media: [
+          {
+            originalSource: file.url,
+            mediaContentType: file.mediaContentType || "IMAGE",
+            alt: file.alt,
+          },
+        ],
+      },
+      { method: "POST", encType: "application/json" }
+    );
     setSelectModalOpen(false);
   };
 
@@ -204,26 +384,15 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
     const { pageInfo } = filesState;
     if (!pageInfo.hasNextPage || !pageInfo.endCursor) return;
     setFilesState((prev) => ({ ...prev, loading: true }));
-    apiGet(`/api/files?first=30&after=${encodeURIComponent(pageInfo.endCursor)}`)
-      .then((result) => {
-        if (!result.ok || !result.data) {
-          setFilesState((prev) => ({ ...prev, loading: false, error: formatMediaPickerError(result) || "Failed to load more" }));
-          return;
-        }
-        const rawNew = result.data?.items ?? result.data?.files ?? result.data?.nodes ?? [];
-        const newItems = rawNew.map((it) => ({ ...it, mediaContentType: it.mediaContentType ?? it.type ?? "IMAGE" }));
-        const nextPageInfo = result.data?.pageInfo ?? { hasNextPage: false, endCursor: null };
-        setFilesState((prev) => ({
-          ...prev,
-          loading: false,
-          items: [...prev.items, ...newItems],
-          pageInfo: nextPageInfo,
-        }));
-      })
-      .catch((e) => {
-        setFilesState((prev) => ({ ...prev, loading: false, error: e?.message ?? "Failed to load more" }));
-      });
+    filesAppendRef.current = true;
+    filesFetcher.load(
+      `/admin/media?intent=files&first=30&after=${encodeURIComponent(pageInfo.endCursor)}`
+    );
   };
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
     <div className="media-picker">
@@ -283,9 +452,7 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
           </button>
         </div>
         {isPendingMode && (
-          <p className="media-picker-hint">
-            Create the product first to attach media.
-          </p>
+          <p className="media-picker-hint">Create the product first to attach media.</p>
         )}
         {(uploadError || mediaLoadError) && (
           <s-banner tone="critical" style={{ marginTop: "12px" }}>
@@ -327,21 +494,14 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
                     className="media-picker-file-card"
                     onClick={() => handlePickFile(file)}
                   >
-                    <img
-                      src={file.previewUrl || file.url || ""}
-                      alt={file.alt || ""}
-                    />
+                    <img src={file.previewUrl || file.url || ""} alt={file.alt || ""} />
                     <span className="media-picker-file-type">{file.mediaContentType ?? file.type ?? "FILE"}</span>
                   </button>
                 ))}
               </div>
             )}
             {filesState.pageInfo.hasNextPage && filesState.items.length > 0 && (
-              <s-button
-                type="button"
-                variant="secondary"
-                onClick={loadMoreFiles}
-              >
+              <s-button type="button" variant="secondary" onClick={loadMoreFiles}>
                 Load more
               </s-button>
             )}

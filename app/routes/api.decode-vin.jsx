@@ -1,11 +1,7 @@
 /**
- * DEPRECATED: use /api/vins. Thin shim: GET /api/decode-vin?vin=XXX → same as GET /api/vins?vin=XXX.
+ * REMOVED: GET /api/decode-vin (was already deprecated shim for /api/vins)
+ * Migrated to POST /admin/_index {vin, decodeOnly:true}.
  */
-import { apiRoute } from "../lib/api.server.js";
-import { handleVinDecode } from "../services/vin-decode-handler.server.js";
-
-export const loader = apiRoute(({ request }) => handleVinDecode(request, { scope: "api.decode-vin" }));
-
-export default function ApiDecodeVin() {
-  return null;
-}
+import { gone } from "../lib/api-gone.server.js";
+export const loader = gone("/api/decode-vin", "POST /admin with {vin, decodeOnly:true}");
+export default function ApiDecodeVinGone() { return null; }
