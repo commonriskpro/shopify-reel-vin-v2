@@ -234,7 +234,7 @@ export function MediaPicker({
                 },
               ],
             },
-            { method: "POST", encType: "application/json" }
+            { method: "POST", encType: "application/json", action: "/admin/media" }
           );
         } else {
           setUploadPhase("idle");
@@ -328,7 +328,7 @@ export function MediaPicker({
 
     stagedFetcher.submit(
       { intent: "staged-uploads", files: [{ filename: file.name, mimeType: mime, fileSize: String(file.size) }] },
-      { method: "POST", encType: "application/json" }
+      { method: "POST", encType: "application/json", action: "/admin/media" }
     );
   };
 
@@ -375,7 +375,7 @@ export function MediaPicker({
           },
         ],
       },
-      { method: "POST", encType: "application/json" }
+      { method: "POST", encType: "application/json", action: "/admin/media" }
     );
     setSelectModalOpen(false);
   };
