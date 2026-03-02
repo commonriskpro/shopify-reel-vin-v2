@@ -19,6 +19,21 @@ export function normalizeVin(rawVin) {
   return String(rawVin ?? "").trim().toUpperCase();
 }
 
+/**
+ * Collapses all NHTSA transmission styles into "Automatic" or "Manual".
+ * CVT, AMT, DCT, Direct Drive, etc. → "Automatic"
+ * Only a plain "Manual" string → "Manual"
+ */
+export function normalizeTransmission(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim().toLowerCase();
+  if (!s || s === "not applicable" || s === "unknown") return null;
+  // Pure manual: value is exactly "manual" or starts with "manual" without
+  // an "automated" / "auto" qualifier before it.
+  if (/^manual(\s|,|\/|$)/.test(s) && !/automat/.test(s)) return "Manual";
+  return "Automatic";
+}
+
 export function isValidVin(vin) {
   return typeof vin === "string" && /^[A-HJ-NPR-Z0-9]{8,17}$/.test(vin);
 }
@@ -61,7 +76,7 @@ export async function decodeVin(vin) {
     displacementL: raw.DisplacementL || null,
     fuelTypePrimary: raw.FuelTypePrimary || null,
     driveType: raw.DriveType || null,
-    transmissionStyle: raw.TransmissionStyle || null,
+    transmissionStyle: normalizeTransmission(raw.TransmissionStyle),
     plantCity: raw.PlantCity || null,
     plantState: raw.PlantState || null,
     plantCountry: raw.PlantCountry || null,

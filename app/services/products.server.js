@@ -7,6 +7,7 @@ import {
   vehicleTitleFromDecoded,
   tagsFromDecoded,
 } from "./vins.server.js";
+import { normalizeTransmission } from "../lib/vin.server.js";
 
 /**
  * @param {import("@shopify/shopify-api").AdminApiContext} admin
@@ -63,7 +64,7 @@ export async function createProductFromVin(admin, options) {
     ...(decoded?.model ? [{ namespace: "vin_decoder", key: "model", type: "single_line_text_field", value: decoded.model }] : []),
     ...(decoded?.driveType ? [{ namespace: "vin_decoder", key: "drivetrain", type: "single_line_text_field", value: decoded.driveType }] : []),
     ...(decoded?.fuelTypePrimary ? [{ namespace: "vin_decoder", key: "fuel_type", type: "single_line_text_field", value: decoded.fuelTypePrimary }] : []),
-    ...(decoded?.transmissionStyle ? [{ namespace: "vin_decoder", key: "transmission", type: "single_line_text_field", value: decoded.transmissionStyle }] : []),
+    ...(() => { const t = normalizeTransmission(decoded?.transmissionStyle); return t ? [{ namespace: "vin_decoder", key: "transmission", type: "single_line_text_field", value: t }] : []; })(),
   ];
   const validTitleStatuses = ["Clean", "Salvage", "Rebuilt", "Junk"];
   if (titleStatus && validTitleStatuses.includes(String(titleStatus).trim())) {
@@ -310,7 +311,8 @@ export async function createProductFull(admin, options) {
     if (decoded.model) vinDecoderMetafields.push({ namespace: "vin_decoder", key: "model", type: "single_line_text_field", value: decoded.model });
     if (decoded.driveType) vinDecoderMetafields.push({ namespace: "vin_decoder", key: "drivetrain", type: "single_line_text_field", value: decoded.driveType });
     if (decoded.fuelTypePrimary) vinDecoderMetafields.push({ namespace: "vin_decoder", key: "fuel_type", type: "single_line_text_field", value: decoded.fuelTypePrimary });
-    if (decoded.transmissionStyle) vinDecoderMetafields.push({ namespace: "vin_decoder", key: "transmission", type: "single_line_text_field", value: decoded.transmissionStyle });
+    const normTransmission = normalizeTransmission(decoded.transmissionStyle);
+    if (normTransmission) vinDecoderMetafields.push({ namespace: "vin_decoder", key: "transmission", type: "single_line_text_field", value: normTransmission });
   }
 
   const allMetafields = [...metafields, ...vinDecoderMetafields];
