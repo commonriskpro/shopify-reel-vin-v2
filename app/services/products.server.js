@@ -238,27 +238,53 @@ export async function createProductFull(admin, options) {
         }))
     : [];
 
-  const { data } = await runGraphQLWithUserErrors(graphql, {
-    query: `#graphql
-    mutation productCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) {
-      productCreate(product: $product, media: $media) {
-        product { id title status }
-        userErrors { field message }
-      }
-    }`,
-    variables: { product: productInput, media: mediaForApi },
-  }, "productCreate");
+  // Only include media in the mutation when there are actual media items.
+  // Passing an empty array can cause Shopify to return "syntax error, unexpected end of file".
+  const hasMedia = mediaForApi.length > 0;
 
-  const product = data?.productCreate?.product;
+  // Retry once on transient GraphQL errors (empty/truncated response from Shopify).
+  let createData;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const result = await runGraphQLWithUserErrors(graphql, {
+        query: hasMedia
+          ? `#graphql mutation productCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) { productCreate(product: $product, media: $media) { product { id title status } userErrors { field message } } }`
+          : `#graphql mutation productCreate($product: ProductCreateInput!) { productCreate(product: $product) { product { id title status } userErrors { field message } } }`,
+        variables: hasMedia
+          ? { product: productInput, media: mediaForApi }
+          : { product: productInput },
+      }, "productCreate");
+      createData = result.data;
+      break;
+    } catch (err) {
+      const isTransient = /syntax error|unexpected end of file|graphql_parse|graphql_error/i.test(err?.message ?? err?.code ?? "");
+      if (attempt < 2 && isTransient) {
+        console.warn(`[createProductFull] productCreate transient error (attempt ${attempt}), retrying in 1s: ${err?.message}`);
+        await new Promise((r) => setTimeout(r, 1000));
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  const product = createData?.productCreate?.product;
   if (!product?.id) throw new Error("Could not create product.");
   const productId = product.id;
 
-  const { data: vData } = await runGraphQL(graphql, {
-    query: `#graphql query getFirstVariant($id: ID!) { product(id: $id) { variants(first: 1) { nodes { id inventoryItem { id } } } } }`,
-    variables: { id: productId },
-  });
-  const variantNode = vData?.product?.variants?.nodes?.[0];
+  // All post-create steps are best-effort — if they fail, the product still exists.
+  // We return warnings instead of failing so users don't see a 502 for an already-created product.
   const warnings = [];
+  let variantNode = null;
+  try {
+    const { data: vData } = await runGraphQL(graphql, {
+      query: `#graphql query getFirstVariant($id: ID!) { product(id: $id) { variants(first: 1) { nodes { id inventoryItem { id } } } } }`,
+      variables: { id: productId },
+    });
+    variantNode = vData?.product?.variants?.nodes?.[0] ?? null;
+  } catch (err) {
+    console.warn("[createProductFull] getFirstVariant failed (non-fatal):", err?.message);
+    warnings.push({ code: "VARIANT_NOT_UPDATED", message: "Could not fetch variant to set price/SKU (product was created)." });
+  }
 
   if (variantNode?.id) {
     const variantUpdates = {};
@@ -272,10 +298,7 @@ export async function createProductFull(admin, options) {
     }
     if (sku?.trim()) variantUpdates.sku = sku.trim();
     if (barcode?.trim()) variantUpdates.barcode = barcode.trim();
-    if (cost != null && cost !== "") {
-      const c = parseFloat(String(cost).replace(/[^0-9.-]/g, ""));
-      if (!Number.isNaN(c)) variantUpdates.cost = String(c);
-    }
+    // Note: cost is set via inventoryItem.unitCost, not a top-level variant field.
     variantUpdates.tracked = Boolean(trackInventory);
     variantUpdates.inventoryPolicy = sellWhenOutOfStock ? "CONTINUE" : "DENY";
 
