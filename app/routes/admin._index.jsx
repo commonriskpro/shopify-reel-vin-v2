@@ -410,8 +410,7 @@ export default function Index() {
         <s-paragraph>
           Enter a VIN and click <s-text type="strong">Decode and add to store</s-text> to
           create a published product with the vehicle details in one step, or decode first
-          then choose &quot;Create product&quot; below. Add a vehicle in a guided flow:{" "}
-          <s-link href="/admin/add-vehicle">Add vehicle</s-link>.
+          then choose &quot;Create product&quot; below.
         </s-paragraph>
         <s-paragraph>
           You can also decode and apply vehicle info to a product from the{" "}
