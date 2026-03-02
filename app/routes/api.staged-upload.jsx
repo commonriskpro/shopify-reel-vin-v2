@@ -1,81 +1,46 @@
 /**
- * DEPRECATED: use /api/staged-uploads. Thin shim: POST /api/staged-upload → same as POST /api/staged-uploads. Returns fixed envelope.
+ * DEPRECATED: use POST /api/staged-uploads. Shim that delegates to same logic.
  */
 import { z } from "zod";
-import { authenticate } from "../shopify.server";
+import { apiRoute, requireAdmin, jsonOk, jsonFail, parseJsonBody } from "../lib/api.server.js";
+import { makeRequestId } from "../lib/api-envelope.js";
 import { createStagedUploads } from "../services/staged-uploads.server.js";
-import { logServerError } from "../http.server.js";
-import { makeRequestId, ok, err, zodErrorToFieldErrors, rejectIfBodyTooLarge } from "../lib/api-envelope.js";
 
+const fileSchema = z.object({
+  filename: z.string(),
+  mimeType: z.string(),
+  fileSize: z.union([z.number(), z.string()]).transform((v) => String(v)),
+});
 const bodySchema = z.object({
-  files: z.array(z.object({
-    filename: z.string(),
-    mimeType: z.string(),
-    fileSize: z.number().optional(),
-  })).min(1, "files array required"),
+  files: z.array(fileSchema).min(1, "files array required"),
 });
 
-export async function action({ request }) {
+export const action = apiRoute(async ({ request }) => {
   const requestId = makeRequestId(request);
   if (request.method !== "POST") {
-    return Response.json(
-      err({ code: "METHOD_NOT_ALLOWED", message: "Method not allowed", source: "VALIDATION" }, { requestId }),
-      { status: 405 }
-    );
+    return jsonFail({ message: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, { status: 405 }, { requestId });
   }
-  const tooLarge = rejectIfBodyTooLarge(request);
-  if (tooLarge) return tooLarge;
-
-  let body;
-  try {
-    body = await request.json();
-  } catch (_) {
-    return Response.json(
-      err({ code: "INVALID_JSON", message: "Invalid JSON", source: "VALIDATION" }, { requestId }),
-      { status: 400 }
-    );
-  }
-
+  const body = await parseJsonBody(request);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return Response.json(
-      err({
-        code: "VALIDATION",
-        message: parsed.error.errors.map((e) => e.message).join("; "),
-        source: "VALIDATION",
-        fieldErrors: zodErrorToFieldErrors(parsed.error),
-      }, { requestId }),
-      { status: 400 }
+    return jsonFail(
+      { message: parsed.error.errors.map((e) => e.message).join("; "), code: "VALIDATION" },
+      { status: 400 },
+      { requestId }
     );
   }
 
-  let admin;
-  try {
-    const auth = await authenticate.admin(request);
-    admin = auth.admin;
-  } catch (_) {
-    return Response.json(
-      err({ code: "UNAUTHORIZED", message: "Authentication required", source: "INTERNAL" }, { requestId }),
-      { status: 401 }
-    );
-  }
+  const { admin } = await requireAdmin(request);
 
-  try {
-    const { stagedTargets } = await createStagedUploads(admin, { files: parsed.data.files });
-    return Response.json(ok({ stagedTargets }, { requestId }));
-  } catch (e) {
-    logServerError("api.staged-upload", e instanceof Error ? e : new Error(String(e)), { requestId });
-    return Response.json(
-      err({
-        code: e?.code ?? "STAGED_UPLOAD_FAILED",
-        message: e?.message ?? "Failed to create staged upload",
-        source: e?.code === "USER_ERRORS" ? "SHOPIFY" : "INTERNAL",
-        retryable: e?.retryable ?? false,
-      }, { requestId }),
-      { status: e?.code === "USER_ERRORS" ? 400 : 502 }
-    );
-  }
-}
+  const normalizedFiles = parsed.data.files.map((f) => ({
+    filename: f.filename,
+    mimeType: f.mimeType,
+    resource: f.mimeType.toLowerCase().startsWith("video/") ? "VIDEO" : "IMAGE",
+    fileSize: f.fileSize,
+  }));
+  const { stagedTargets } = await createStagedUploads(admin, { files: normalizedFiles });
+  return jsonOk({ stagedTargets }, {}, { requestId });
+});
 
 export default function ApiStagedUpload() {
   return null;

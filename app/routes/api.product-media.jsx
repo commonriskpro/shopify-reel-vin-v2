@@ -1,11 +1,14 @@
 /**
- * DEPRECATED: use /api/products/:productId/media. Thin shim: GET /api/product-media?productId=XXX and POST /api/product-media (body: productId, media). Returns fixed envelope.
+ * DEPRECATED: use GET/POST /api/products/:productId/media instead.
+ * Shim: GET /api/product-media?productId=XXX and POST /api/product-media (body: productId, media).
+ * Always returns application/json (apiRoute).
  */
 import { z } from "zod";
-import { authenticate } from "../shopify.server";
-import { getProductMedia, addProductMedia } from "../services/product-media.server.js";
-import { logServerError } from "../http.server.js";
-import { makeRequestId, ok, err, zodErrorToFieldErrors, rejectIfBodyTooLarge } from "../lib/api-envelope.js";
+import { apiRoute, requireAdmin, jsonOk, jsonFail, ApiError, parseJsonBody } from "../lib/api.server.js";
+import { makeRequestId } from "../lib/api-envelope.js";
+import { getProductMedia, attachMediaToProduct } from "../services/product-media.server.js";
+
+const productIdQuerySchema = z.string().min(1, "productId required").max(128, "productId too long");
 
 const addMediaBodySchema = z.object({
   productId: z.string().min(1, "productId required").max(128, "productId too long"),
@@ -16,107 +19,70 @@ const addMediaBodySchema = z.object({
   })).min(1, "media array required"),
 });
 
-export async function loader({ request }) {
+export const loader = apiRoute(async ({ request }) => {
   const requestId = makeRequestId(request);
   const url = new URL(request.url);
-  const productId = url.searchParams.get("productId");
-  if (!productId) {
-    return Response.json(
-      err({ code: "VALIDATION", message: "productId required", source: "VALIDATION" }, { requestId }),
-      { status: 400 }
+  const productIdParam = url.searchParams.get("productId");
+  const parsed = productIdQuerySchema.safeParse(productIdParam ?? "");
+  if (!parsed.success) {
+    return jsonFail(
+      { message: parsed.error.errors.map((e) => e.message).join("; ") || "productId required", code: "VALIDATION" },
+      { status: 400 },
+      { requestId }
     );
   }
+  const productId = parsed.data;
 
-  let admin;
-  try {
-    const auth = await authenticate.admin(request);
-    admin = auth.admin;
-  } catch (e) {
-    return Response.json(
-      err({ code: "UNAUTHORIZED", message: "Authentication required", source: "INTERNAL" }, { requestId }),
-      { status: 401 }
-    );
-  }
+  const { admin } = await requireAdmin(request);
 
   try {
     const { media } = await getProductMedia(admin, productId);
-    return Response.json(ok({ media }, { requestId }));
+    return jsonOk({ media }, {}, { requestId });
   } catch (e) {
-    logServerError("api.product-media.loader", e instanceof Error ? e : new Error(String(e)), { requestId });
-    const isNotFound = e?.code === "NOT_FOUND";
-    return Response.json(
-      err({
-        code: isNotFound ? "NOT_FOUND" : "MEDIA_FETCH_FAILED",
-        message: e?.message ?? "Failed to load media",
-        source: "SHOPIFY",
-        retryable: !isNotFound,
-      }, { requestId }),
-      { status: isNotFound ? 404 : 502 }
+    if (e instanceof ApiError && e.status === 404) {
+      return jsonFail({ message: e.message, code: "NOT_FOUND" }, { status: 404 }, { requestId });
+    }
+    if (e instanceof ApiError) throw e;
+    return jsonFail(
+      { message: e?.message ?? "Failed to load media", code: "MEDIA_FETCH_FAILED" },
+      { status: 502 },
+      { requestId }
     );
   }
-}
+});
 
-export async function action({ request }) {
+export const action = apiRoute(async ({ request }) => {
   const requestId = makeRequestId(request);
   if (request.method !== "POST") {
-    return Response.json(
-      err({ code: "METHOD_NOT_ALLOWED", message: "Method not allowed", source: "VALIDATION" }, { requestId }),
-      { status: 405 }
-    );
+    return jsonFail({ message: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, { status: 405 }, { requestId });
   }
-  const tooLarge = rejectIfBodyTooLarge(request);
-  if (tooLarge) return tooLarge;
-
-  let body;
-  try {
-    body = await request.json();
-  } catch (_) {
-    return Response.json(
-      err({ code: "INVALID_JSON", message: "Invalid JSON", source: "VALIDATION" }, { requestId }),
-      { status: 400 }
-    );
-  }
-
+  const body = await parseJsonBody(request);
   const parsed = addMediaBodySchema.safeParse(body);
   if (!parsed.success) {
-    return Response.json(
-      err({
-        code: "VALIDATION",
-        message: parsed.error.errors.map((e) => e.message).join("; "),
-        source: "VALIDATION",
-        fieldErrors: zodErrorToFieldErrors(parsed.error),
-      }, { requestId }),
-      { status: 400 }
+    return jsonFail(
+      { message: parsed.error.errors.map((e) => e.message).join("; "), code: "VALIDATION" },
+      { status: 400 },
+      { requestId }
     );
   }
 
-  let admin;
-  try {
-    const auth = await authenticate.admin(request);
-    admin = auth.admin;
-  } catch (e) {
-    return Response.json(
-      err({ code: "UNAUTHORIZED", message: "Authentication required", source: "INTERNAL" }, { requestId }),
-      { status: 401 }
-    );
-  }
+  const { admin } = await requireAdmin(request);
 
   try {
-    const { media } = await addProductMedia(admin, parsed.data.productId, parsed.data.media);
-    return Response.json(ok({ media }, { requestId }));
+    const result = await attachMediaToProduct(admin, {
+      productId: parsed.data.productId,
+      media: parsed.data.media,
+    });
+    return jsonOk(result, {}, { requestId });
   } catch (e) {
-    logServerError("api.product-media.action", e instanceof Error ? e : new Error(String(e)), { requestId });
-    return Response.json(
-      err({
-        code: e?.code ?? "MEDIA_ADD_FAILED",
-        message: e?.message ?? "Failed to add media",
-        source: e?.code === "USER_ERRORS" ? "SHOPIFY" : "INTERNAL",
-        retryable: false,
-      }, { requestId }),
-      { status: e?.code === "USER_ERRORS" ? 400 : 502 }
+    if (e instanceof ApiError) throw e;
+    return jsonFail(
+      { message: e?.message ?? "Failed to add media", code: "MEDIA_ADD_FAILED" },
+      { status: 502 },
+      { requestId }
     );
   }
-}
+});
 
 export default function ApiProductMedia() {
   return null;

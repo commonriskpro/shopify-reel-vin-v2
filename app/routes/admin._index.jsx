@@ -8,7 +8,8 @@ import { logServerError } from "../http.server.js";
 import { decodeVin, vehicleTitleFromDecoded } from "../services/vins.server.js";
 import { createProductFromVin } from "../services/products.server.js";
 import { enforceRateLimit, isValidVin, normalizeVin } from "../security.server.js";
-import { apiFetch, getWarnings } from "../lib/api-client.js";
+import { getWarnings } from "../lib/api-client.js";
+import { useApiClient } from "../lib/api.client.js";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -209,6 +210,7 @@ function productAdminUrl(shop, productIdGid) {
 
 export default function Index() {
   const { shop } = useLoaderData() ?? {};
+  const { apiGet } = useApiClient();
   const [vin, setVin] = useState("");
   const [createdProducts, setCreatedProducts] = useState([]);
   const [decodeLoading, setDecodeLoading] = useState(false);
@@ -227,12 +229,12 @@ export default function Index() {
     setDecodeLoading(true);
     setDecodeResult(null);
     try {
-      const res = await apiFetch(`${DECODE_API}?vin=${encodeURIComponent(v)}`);
+      const res = await apiGet(`${DECODE_API}?vin=${encodeURIComponent(v)}`);
       setDecodeResult(res);
     } finally {
       setDecodeLoading(false);
     }
-  }, [vin]);
+  }, [vin, apiGet]);
 
   const handleDecodeAndCreateDraft = () => {
     const v = vin.trim().toUpperCase();

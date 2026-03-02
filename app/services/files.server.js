@@ -1,14 +1,19 @@
 /**
- * Shop files service for media picker. Uses GraphQL wrapper only.
+ * Shop files service for media picker. Lists Shopify Files (images/videos/generic).
+ * Returns normalized items for "Select existing" modal.
  */
 import { runGraphQL } from "../lib/shopify-graphql.server.js";
 
 /**
+ * @typedef {{ id: string; type: "IMAGE"|"VIDEO"|"FILE"; alt?: string; createdAt?: string; previewUrl?: string; url: string }} FileItem
+ */
+
+/**
  * @param {import("@shopify/shopify-api").AdminApiContext} admin
  * @param {{ first: number; after?: string | null }} options
- * @returns {Promise<{ nodes: Array<{ id: string; cursor: string; alt?: string; url: string; mediaContentType: string; previewUrl?: string }>; pageInfo: { hasNextPage: boolean; endCursor: string | null } }>}
+ * @returns {Promise<{ items: FileItem[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } }>}
  */
-export async function listShopFiles(admin, { first, after }) {
+export async function listFiles(admin, { first, after }) {
   const graphql = admin?.graphql;
   if (!graphql) throw new Error("Admin GraphQL required");
   const { data } = await runGraphQL(graphql, {
@@ -23,28 +28,50 @@ export async function listShopFiles(admin, { first, after }) {
   });
   const files = data?.files;
   const edges = files?.edges ?? [];
-  const nodes = edges
-    .map(({ node, cursor }) => {
-      let fileUrl = null;
-      let mediaContentType = "IMAGE";
+  const items = edges
+    .map(({ node }) => {
+      let url = null;
+      let type = "FILE";
       if (node?.image?.url) {
-        fileUrl = node.image.url;
+        url = node.image.url;
+        type = "IMAGE";
       } else if (node?.sources?.[0]?.url) {
-        fileUrl = node.sources[0].url;
-        mediaContentType = "VIDEO";
+        url = node.sources[0].url;
+        type = "VIDEO";
       } else if (node?.previewImage?.url) {
-        fileUrl = node.previewImage.url;
-        mediaContentType = "VIDEO";
+        url = node.previewImage.url;
+        type = "VIDEO";
       } else if (node?.url) {
-        fileUrl = node.url;
-        mediaContentType = (node?.mimeType || "").startsWith("video/") ? "VIDEO" : "IMAGE";
+        url = node.url;
+        type = (node?.mimeType || "").startsWith("video/") ? "VIDEO" : "IMAGE";
       }
       const previewUrl = node?.image?.url || node?.previewImage?.url || node?.sources?.[0]?.url || node?.url;
-      return { id: node?.id, cursor, alt: node?.alt, url: fileUrl, mediaContentType, previewUrl };
+      if (!url) return null;
+      return {
+        id: node?.id,
+        type: /** @type {FileItem["type"]} */ (type),
+        alt: node?.alt ?? undefined,
+        createdAt: undefined,
+        previewUrl: previewUrl ?? undefined,
+        url,
+      };
     })
-    .filter((n) => n.url);
+    .filter(Boolean);
   return {
-    nodes,
+    items,
     pageInfo: files?.pageInfo ?? { hasNextPage: false, endCursor: null },
   };
+}
+
+/** @deprecated Use listFiles. Kept for compatibility. */
+export async function listShopFiles(admin, options) {
+  const { items, pageInfo } = await listFiles(admin, options);
+  const nodes = items.map((it) => ({
+    id: it.id,
+    alt: it.alt,
+    url: it.url,
+    mediaContentType: it.type,
+    previewUrl: it.previewUrl,
+  }));
+  return { nodes, pageInfo };
 }

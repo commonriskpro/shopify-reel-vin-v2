@@ -1,38 +1,36 @@
 /**
- * GET /api/vins?vin=XXX — Decode VIN (resource-only). Zod at edge, fixed envelope.
+ * GET /api/vins?vin=XXX — Decode VIN (resource-only). Zod at edge, unified envelope.
  */
 import { z } from "zod";
-import { authenticate } from "../shopify.server";
+import { apiRoute, requireAdmin, jsonOk, jsonFail } from "../lib/api.server.js";
+import { makeRequestId } from "../lib/api-envelope.js";
 import { enforceRateLimit } from "../security.server.js";
 import { decodeVin, normalizeVin, isValidVin } from "../services/vins.server.js";
 import { logServerError } from "../http.server.js";
-import { makeRequestId, ok, err } from "../lib/api-envelope.js";
 
 const querySchema = z.object({ vin: z.string().min(1, "vin is required") });
 
-export async function loader({ request }) {
+/**
+ * Shared VIN decode handler. Used by api.vins and api.decode-vin (shim).
+ * @param {Request} request
+ * @param {{ scope?: string }} [opts]
+ * @returns {Promise<Response>}
+ */
+export async function handleVinDecode(request, { scope = "api.vins" } = {}) {
   const requestId = makeRequestId(request);
-  let session;
-  try {
-    const auth = await authenticate.admin(request);
-    session = auth.session;
-  } catch (e) {
-    return Response.json(
-      err({ code: "UNAUTHORIZED", message: "Authentication required", source: "INTERNAL" }, { requestId }),
-      { status: 401 }
-    );
-  }
+  const { session } = await requireAdmin(request);
 
   const limited = enforceRateLimit(request, {
-    scope: "api.vins",
+    scope,
     limit: 30,
     windowMs: 60_000,
     keyParts: [session?.shop ?? "unknown"],
   });
   if (!limited.ok) {
-    return Response.json(
-      err({ code: "RATE_LIMIT", message: "Too many VIN decode requests. Please try again shortly.", source: "INTERNAL", retryable: true }, { requestId }),
-      { status: 429, headers: { "Retry-After": String(limited.retryAfterSeconds) } }
+    return jsonFail(
+      { message: "Too many VIN decode requests. Please try again shortly.", code: "RATE_LIMIT" },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfterSeconds) } },
+      { requestId }
     );
   }
 
@@ -46,43 +44,46 @@ export async function loader({ request }) {
       if (!fieldErrors[path]) fieldErrors[path] = [];
       fieldErrors[path].push(issue.message);
     }
-    return Response.json(
-      err({ code: "VALIDATION", message: msg, source: "VALIDATION", fieldErrors }, { requestId }),
-      { status: 400 }
+    return jsonFail(
+      { message: msg, code: "VALIDATION", details: { fieldErrors } },
+      { status: 400 },
+      { requestId }
     );
   }
 
   const vin = normalizeVin(parsed.data.vin);
   if (!isValidVin(vin)) {
-    return Response.json(
-      err({
-        code: "INVALID_VIN",
+    return jsonFail(
+      {
         message: "Please provide a valid VIN (8–17 characters).",
-        source: "VALIDATION",
-        fieldErrors: { vin: ["Please provide a valid VIN (8–17 characters)."] },
-      }, { requestId }),
-      { status: 400 }
+        code: "INVALID_VIN",
+        details: { fieldErrors: { vin: ["Please provide a valid VIN (8–17 characters)."] } },
+      },
+      { status: 400 },
+      { requestId }
     );
   }
 
   try {
     const { decoded, raw } = await decodeVin(vin);
-    return Response.json(ok({ decoded, raw }, { requestId }));
+    return jsonOk({ decoded, raw }, {}, { requestId });
   } catch (e) {
     const message = e?.message ?? "Failed to decode VIN.";
     const isNotFound = message.includes("No decode results");
-    logServerError("api.vins", e instanceof Error ? e : new Error(message), { requestId });
-    return Response.json(
-      err({
-        code: isNotFound ? "NOT_FOUND" : "VPIC_ERROR",
+    logServerError(scope, e instanceof Error ? e : new Error(message), { requestId });
+    return jsonFail(
+      {
         message: isNotFound ? "No decode results found for this VIN." : message,
-        source: isNotFound ? "VPIC" : "VPIC",
-        retryable: !isNotFound,
-      }, { requestId }),
-      { status: isNotFound ? 404 : 502 }
+        code: isNotFound ? "NOT_FOUND" : "VPIC_ERROR",
+        details: { retryable: !isNotFound },
+      },
+      { status: isNotFound ? 404 : 502 },
+      { requestId }
     );
   }
 }
+
+export const loader = apiRoute(({ request }) => handleVinDecode(request, { scope: "api.vins" }));
 
 export default function ApiVins() {
   return null;

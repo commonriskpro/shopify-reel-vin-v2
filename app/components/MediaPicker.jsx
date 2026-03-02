@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useFetcher } from "react-router";
-import { apiFetch } from "../lib/api-client.js";
+import { useApiClient, formatApiError } from "../lib/api.client.js";
 
 function getPreviewUrl(node) {
   if (node?.image?.url) return node.image.url;
@@ -16,36 +15,53 @@ function getDisplayUrl(item, isPending) {
   return getPreviewUrl(item);
 }
 
-function formatApiError(result) {
-  if (!result || result.ok) return null;
-  const msg = result.error?.message ?? result.error?.code ?? "Request failed";
-  const requestId = result.meta?.requestId;
-  return requestId ? `${msg} (Request ID: ${requestId})` : msg;
+function formatMediaPickerError(result) {
+  const msg = formatApiError(result);
+  return msg || null;
 }
 
 export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange, media, onMediaChange, disabled }) {
+  const { apiGet, apiPost } = useApiClient();
+
   const fileInputRef = useRef(null);
   const modalRef = useRef(null);
-  const mediaFetcher = useFetcher({ key: "media" });
-  const filesFetcher = useFetcher({ key: "files" });
   const [selectModalOpen, setSelectModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [uploadRequestId, setUploadRequestId] = useState(null);
 
+  const [filesState, setFilesState] = useState({
+    loading: false,
+    error: null,
+    items: [],
+    pageInfo: { hasNextPage: false, endCursor: null },
+  });
+
+  const [mediaData, setMediaData] = useState(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaLoadError, setMediaLoadError] = useState(null);
+  const [mediaLoadRequestId, setMediaLoadRequestId] = useState(null);
+
   const hasProductId = Boolean(productId);
-  const mediaPayload = mediaFetcher.data?.ok === true ? mediaFetcher.data?.data : mediaFetcher.data;
-  const savedMedia = (media && media.length) ? media : (mediaPayload?.media ?? mediaFetcher.data?.media ?? []);
+  const savedMedia = (media && media.length) ? media : (mediaData?.ok === true ? mediaData?.data?.media : mediaData?.media) ?? [];
   const currentMedia = hasProductId ? savedMedia : pendingMedia;
   const isPendingMode = !hasProductId;
-  const mediaLoadFailed = mediaFetcher.data?.ok === false;
-  const mediaLoadIsNotFound = mediaFetcher.data?.error?.code === "NOT_FOUND";
-  const mediaLoadError = mediaLoadFailed ? formatApiError(mediaFetcher.data) : null;
-  const mediaLoadRequestId = mediaFetcher.data?.meta?.requestId;
+  const mediaLoadFailed = mediaData?.ok === false;
+  const mediaLoadIsNotFound = mediaData?.error?.code === "NOT_FOUND";
 
   useEffect(() => {
-    if (hasProductId && productId && mediaFetcher.state === "idle" && !mediaFetcher.data) {
-      mediaFetcher.load(`/api/products/${encodeURIComponent(productId)}/media`);
+    if (hasProductId && productId) {
+      let cancelled = false;
+      setMediaLoading(true);
+      setMediaLoadError(null);
+      apiGet(`/api/products/${encodeURIComponent(productId)}/media`).then((result) => {
+        if (cancelled) return;
+        setMediaLoading(false);
+        setMediaData(result);
+        if (result?.ok === false) setMediaLoadError(formatMediaPickerError(result));
+        if (result?.meta?.requestId) setMediaLoadRequestId(result.meta.requestId);
+      });
+      return () => { cancelled = true; };
     }
   }, [hasProductId, productId]);
 
@@ -69,13 +85,8 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
     setUploading(true);
     try {
       const mime = file.type || "image/jpeg";
-      const resource = mime.startsWith("video/") ? "PRODUCT_VIDEO" : "PRODUCT_IMAGE";
-      const fileSize = resource === "PRODUCT_VIDEO" ? file.size : undefined;
-      const stagedResult = await apiFetch("/api/staged-uploads", {
-        method: "POST",
-        body: JSON.stringify({
-          files: [{ filename: file.name, mimeType: mime, fileSize }],
-        }),
+      const stagedResult = await apiPost("/api/staged-uploads", {
+        files: [{ filename: file.name, mimeType: mime, fileSize: String(file.size) }],
       });
       if (!stagedResult.ok) {
         setUploadRequestId(stagedResult.meta?.requestId);
@@ -98,7 +109,8 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
         throw new Error("Upload failed");
       }
 
-      const mediaContentType = resource === "PRODUCT_VIDEO" ? "VIDEO" : "IMAGE";
+      const isVideo = file.type.startsWith("video/");
+      const mediaContentType = isVideo ? "VIDEO" : "IMAGE";
       const alt = file.name;
 
       if (isPendingMode && onPendingMediaChange) {
@@ -108,11 +120,8 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
           { originalSource: target.resourceUrl, mediaContentType, alt, previewUrl },
         ]);
       } else if (hasProductId && productId) {
-        const addResult = await apiFetch(`/api/products/${encodeURIComponent(productId)}/media`, {
-          method: "POST",
-          body: JSON.stringify({
-            media: [{ originalSource: target.resourceUrl, mediaContentType, alt }],
-          }),
+        const addResult = await apiPost(`/api/products/${encodeURIComponent(productId)}/media`, {
+          media: [{ originalSource: target.resourceUrl, mediaContentType, alt }],
         });
         if (!addResult.ok) {
           setUploadRequestId(addResult.meta?.requestId);
@@ -120,7 +129,8 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
         }
         const addedMedia = addResult.data?.media ?? [];
         onMediaChange?.(addedMedia);
-        mediaFetcher.load(`/api/products/${encodeURIComponent(productId)}/media`);
+        const refresh = await apiGet(`/api/products/${encodeURIComponent(productId)}/media`);
+        setMediaData(refresh);
       }
     } catch (err) {
       setUploadError(err?.message || "Upload failed");
@@ -132,13 +142,26 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
   const handleSelectExisting = () => {
     if (disabled) return;
     setSelectModalOpen(true);
-    if (filesFetcher.state === "idle" && !filesFetcher.data) {
-      filesFetcher.load("/api/files?first=30");
-    }
+    setFilesState((prev) => ({ ...prev, loading: true, error: null, items: [] }));
+    apiGet("/api/files?first=30")
+      .then((result) => {
+        if (result.ok && result.data) {
+          const rawItems = result.data?.items ?? result.data?.files ?? result.data?.nodes ?? [];
+          const items = rawItems.map((it) => ({ ...it, mediaContentType: it.mediaContentType ?? it.type ?? "IMAGE" }));
+          const pageInfo = result.data?.pageInfo ?? { hasNextPage: false, endCursor: null };
+          setFilesState({ loading: false, error: null, items, pageInfo });
+        } else {
+          setFilesState((prev) => ({
+            ...prev,
+            loading: false,
+            error: formatMediaPickerError(result) || "Failed to load files",
+          }));
+        }
+      })
+      .catch((e) => {
+        setFilesState((prev) => ({ ...prev, loading: false, error: e?.message ?? "Failed to load files" }));
+      });
   };
-
-  const filesError = filesFetcher.data?.ok === false ? formatApiError(filesFetcher.data) : filesFetcher.data?.error;
-  const filesRequestId = filesFetcher.data?.meta?.requestId;
 
   const handleRemovePending = (index) => {
     const item = pendingMedia[index];
@@ -164,28 +187,43 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
       return;
     }
     if (!hasProductId || !productId) return;
-    const addResult = await apiFetch(`/api/products/${encodeURIComponent(productId)}/media`, {
-      method: "POST",
-      body: JSON.stringify({
-        media: [
-          {
-            originalSource: file.url,
-            mediaContentType: file.mediaContentType || "IMAGE",
-            alt: file.alt,
-          },
-        ],
-      }),
+    const addResult = await apiPost(`/api/products/${encodeURIComponent(productId)}/media`, {
+      media: [
+        { originalSource: file.url, mediaContentType: file.mediaContentType || "IMAGE", alt: file.alt },
+      ],
     });
     if (addResult.ok && addResult.data?.media) {
       onMediaChange?.(addResult.data.media);
-      mediaFetcher.load(`/api/products/${encodeURIComponent(productId)}/media`);
+      const refresh = await apiGet(`/api/products/${encodeURIComponent(productId)}/media`);
+      setMediaData(refresh);
     }
     setSelectModalOpen(false);
   };
 
-  const filesPayload = filesFetcher.data?.ok === true ? filesFetcher.data?.data : filesFetcher.data;
-  const files = filesPayload?.nodes ?? filesFetcher.data?.nodes ?? [];
-  const pageInfo = filesPayload?.pageInfo ?? filesFetcher.data?.pageInfo ?? { hasNextPage: false, endCursor: null };
+  const loadMoreFiles = () => {
+    const { pageInfo } = filesState;
+    if (!pageInfo.hasNextPage || !pageInfo.endCursor) return;
+    setFilesState((prev) => ({ ...prev, loading: true }));
+    apiGet(`/api/files?first=30&after=${encodeURIComponent(pageInfo.endCursor)}`)
+      .then((result) => {
+        if (!result.ok || !result.data) {
+          setFilesState((prev) => ({ ...prev, loading: false, error: formatMediaPickerError(result) || "Failed to load more" }));
+          return;
+        }
+        const rawNew = result.data?.items ?? result.data?.files ?? result.data?.nodes ?? [];
+        const newItems = rawNew.map((it) => ({ ...it, mediaContentType: it.mediaContentType ?? it.type ?? "IMAGE" }));
+        const nextPageInfo = result.data?.pageInfo ?? { hasNextPage: false, endCursor: null };
+        setFilesState((prev) => ({
+          ...prev,
+          loading: false,
+          items: [...prev.items, ...newItems],
+          pageInfo: nextPageInfo,
+        }));
+      })
+      .catch((e) => {
+        setFilesState((prev) => ({ ...prev, loading: false, error: e?.message ?? "Failed to load more" }));
+      });
+  };
 
   return (
     <div className="media-picker">
@@ -238,10 +276,10 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
           <button
             type="button"
             className="media-picker-btn"
-            disabled={disabled || filesFetcher.state === "loading"}
+            disabled={disabled || filesState.loading}
             onClick={handleSelectExisting}
           >
-            {filesFetcher.state === "loading" ? "Loading…" : "Select existing"}
+            {filesState.loading ? "Loading…" : "Select existing"}
           </button>
         </div>
         {isPendingMode && (
@@ -272,24 +310,17 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
           size="large"
         >
           <div className="media-picker-modal-content">
-            {filesFetcher.state === "loading" && !files.length ? (
+            {filesState.loading && !filesState.items.length ? (
               <p className="media-picker-loading">Loading files…</p>
-            ) : filesError ? (
-              <p className="media-picker-empty media-picker-error">
-                {filesError}
-                {filesRequestId && (
-                  <span style={{ display: "block", marginTop: "6px", fontSize: "12px" }}>
-                    Request ID: <code style={{ userSelect: "all" }}>{filesRequestId}</code>
-                  </span>
-                )}
-              </p>
-            ) : files.length === 0 ? (
+            ) : filesState.error ? (
+              <p className="media-picker-empty media-picker-error">{filesState.error}</p>
+            ) : filesState.items.length === 0 ? (
               <p className="media-picker-empty">
                 No files found. Upload images in Shopify Admin (Content → Files) or add media to a product first.
               </p>
             ) : (
               <div className="media-picker-files-grid">
-                {files.map((file) => (
+                {filesState.items.map((file) => (
                   <button
                     key={file.id}
                     type="button"
@@ -300,20 +331,16 @@ export function MediaPicker({ productId, pendingMedia = [], onPendingMediaChange
                       src={file.previewUrl || file.url || ""}
                       alt={file.alt || ""}
                     />
-                    <span className="media-picker-file-type">{file.mediaContentType}</span>
+                    <span className="media-picker-file-type">{file.mediaContentType ?? file.type ?? "FILE"}</span>
                   </button>
                 ))}
               </div>
             )}
-            {pageInfo.hasNextPage && files.length > 0 && (
+            {filesState.pageInfo.hasNextPage && filesState.items.length > 0 && (
               <s-button
                 type="button"
                 variant="secondary"
-                onClick={() =>
-                  filesFetcher.load(
-                    `/api/files?first=30&after=${encodeURIComponent(pageInfo.endCursor)}`
-                  )
-                }
+                onClick={loadMoreFiles}
               >
                 Load more
               </s-button>
