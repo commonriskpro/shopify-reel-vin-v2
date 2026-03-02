@@ -19,7 +19,7 @@ export async function getProductMedia(admin, productId) {
       product(id: $id) {
         id
         media(first: 50) {
-          nodes { id alt mediaContentType status ... on MediaImage { image { url } } ... on Video { sources { url } previewImage { url } } }
+          nodes { id alt mediaContentType status ... on MediaImage { image { url } } ... on Video { sources { url } preview { image { url } } } }
         }
       }
     }`,

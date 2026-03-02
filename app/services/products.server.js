@@ -9,6 +9,15 @@ import {
 } from "./vins.server.js";
 import { normalizeTransmission } from "../lib/vin.server.js";
 
+/** Strip control chars and fix invalid UTF-8 so GraphQL/JSON never sees broken payloads (avoids "syntax error, unexpected end of file"). */
+function sanitizeForGraphQL(s) {
+  if (s == null || typeof s !== "string") return s;
+  return s
+    .replace(/\u0000/g, "") // null byte
+    .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "") // control chars except \t \n \r
+    .replace(/\uFFFD/g, ""); // strip replacement chars from prior bad UTF-8
+}
+
 /**
  * @param {import("@shopify/shopify-api").AdminApiContext} admin
  * @param {{ vin: string; title: string; decoded?: object | null; titleStatus?: string; mileage?: number | string }} options
@@ -193,27 +202,30 @@ export async function createProductFull(admin, options) {
     media: mediaInput = [],
   } = options;
 
-  const safeTitle = String(title || "").trim().slice(0, 255);
+  const safeTitle = sanitizeForGraphQL(String(title || "").trim()).slice(0, 255);
   if (!safeTitle) throw new Error("Title is required.");
 
   const productInput = {
     title: safeTitle,
     status,
-    productType: productType?.trim() || "Vehicles",
+    productType: sanitizeForGraphQL(productType?.trim()) || "Vehicles",
   };
-  // Keep GraphQL variables small to avoid Shopify "syntax error, unexpected end of file" (truncated request)
-  const MAX_DESCRIPTION_CHARS = 100_000; // ~100KB raw; JSON-escaped can be ~300KB
+  // Keep GraphQL variables small and safe (no control chars) to avoid "syntax error, unexpected end of file"
+  const MAX_DESCRIPTION_CHARS = 100_000;
   if (descriptionHtml != null && descriptionHtml !== "") {
-    productInput.descriptionHtml = String(descriptionHtml).slice(0, MAX_DESCRIPTION_CHARS);
+    productInput.descriptionHtml = sanitizeForGraphQL(String(descriptionHtml)).slice(0, MAX_DESCRIPTION_CHARS);
   }
-  if (vendor?.trim()) productInput.vendor = vendor.trim();
-  if (Array.isArray(tags) && tags.length) productInput.tags = tags.filter(Boolean).map((t) => String(t).trim());
-  if (categoryId?.trim()) productInput.category = categoryId.trim();
-  if (templateSuffix?.trim()) productInput.templateSuffix = templateSuffix.trim();
+  const safeVendor = sanitizeForGraphQL(vendor?.trim());
+  if (safeVendor) productInput.vendor = safeVendor;
+  if (Array.isArray(tags) && tags.length) {
+    productInput.tags = tags.filter(Boolean).map((t) => sanitizeForGraphQL(String(t).trim()));
+  }
+  if (categoryId?.trim()) productInput.category = sanitizeForGraphQL(categoryId.trim());
+  if (templateSuffix?.trim()) productInput.templateSuffix = sanitizeForGraphQL(templateSuffix.trim());
   if (seoTitle != null || seoDescription != null) {
     productInput.seo = {};
-    if (seoTitle != null) productInput.seo.title = String(seoTitle).trim().slice(0, 70);
-    if (seoDescription != null) productInput.seo.description = String(seoDescription).trim().slice(0, 320);
+    if (seoTitle != null) productInput.seo.title = sanitizeForGraphQL(String(seoTitle).trim()).slice(0, 70);
+    if (seoDescription != null) productInput.seo.description = sanitizeForGraphQL(String(seoDescription).trim()).slice(0, 320);
   }
 
   const mediaForApi = Array.isArray(mediaInput)

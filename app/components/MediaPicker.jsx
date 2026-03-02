@@ -23,14 +23,65 @@ import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
 // ---------------------------------------------------------------------------
-// Constants & helpers
+// Constants & helpers — all common image and video formats
 // ---------------------------------------------------------------------------
 
 const ACCEPTED_MIME_RE = /^image\/|^video\//;
-const ACCEPTED_EXT_RE = /\.(glb|gltf)$/i;
+// Extensions when file.type is empty (e.g. some .jpg on Windows)
+const IMAGE_EXT_RE = /\.(jpg|jpeg|png|gif|webp|svg|bmp|avif|heic|ico|tiff?)$/i;
+const VIDEO_EXT_RE = /\.(mp4|webm|mov|avi|ogv|m4v|quicktime)$/i;
+const MODEL_EXT_RE = /\.(glb|gltf)$/i;
+const ACCEPTED_EXT_RE = new RegExp(
+  [IMAGE_EXT_RE.source, VIDEO_EXT_RE.source, MODEL_EXT_RE.source].join("|")
+);
+
+/** Extension → { mime, isVideo } for when file.type is missing */
+const EXT_TO_MIME = {
+  jpg: { mime: "image/jpeg", isVideo: false },
+  jpeg: { mime: "image/jpeg", isVideo: false },
+  png: { mime: "image/png", isVideo: false },
+  gif: { mime: "image/gif", isVideo: false },
+  webp: { mime: "image/webp", isVideo: false },
+  svg: { mime: "image/svg+xml", isVideo: false },
+  bmp: { mime: "image/bmp", isVideo: false },
+  avif: { mime: "image/avif", isVideo: false },
+  heic: { mime: "image/heic", isVideo: false },
+  ico: { mime: "image/x-icon", isVideo: false },
+  tiff: { mime: "image/tiff", isVideo: false },
+  tif: { mime: "image/tiff", isVideo: false },
+  mp4: { mime: "video/mp4", isVideo: true },
+  webm: { mime: "video/webm", isVideo: true },
+  mov: { mime: "video/quicktime", isVideo: true },
+  avi: { mime: "video/x-msvideo", isVideo: true },
+  ogv: { mime: "video/ogg", isVideo: true },
+  m4v: { mime: "video/x-m4v", isVideo: true },
+  glb: { mime: "model/gltf-binary", isVideo: false },
+  gltf: { mime: "model/gltf+json", isVideo: false },
+};
+
+function getExtension(name) {
+  if (!name || typeof name !== "string") return "";
+  const i = name.lastIndexOf(".");
+  return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
+}
+
+function getMimeAndKind(file) {
+  if (file.type && ACCEPTED_MIME_RE.test(file.type)) {
+    return {
+      mime: file.type,
+      isVideo: file.type.startsWith("video/"),
+    };
+  }
+  const ext = getExtension(file.name);
+  const entry = ext ? EXT_TO_MIME[ext] : null;
+  if (entry) return { mime: entry.mime, isVideo: entry.isVideo };
+  return { mime: "image/jpeg", isVideo: false };
+}
 
 function isAcceptedFile(file) {
-  return ACCEPTED_MIME_RE.test(file.type) || ACCEPTED_EXT_RE.test(file.name);
+  if (!file?.name) return false;
+  if (file.type && ACCEPTED_MIME_RE.test(file.type)) return true;
+  return ACCEPTED_EXT_RE.test(file.name);
 }
 
 function makeId() {
@@ -368,16 +419,22 @@ export function MediaPicker({
 
   const processFiles = (fileArray) => {
     const valid = fileArray.filter(isAcceptedFile);
-    if (!valid.length) return;
+    if (!valid.length) {
+      setUploadError("Unsupported file type. Use image (e.g. JPG, PNG, WebP) or video (e.g. MP4, WebM) formats.");
+      return;
+    }
 
-    const items = valid.map((file) => ({
-      id: makeId(),
-      file,
-      mime: file.type || "image/jpeg",
-      isVideo: file.type.startsWith("video/"),
-      alt: file.name,
-      name: file.name,
-    }));
+    const items = valid.map((file) => {
+      const { mime, isVideo } = getMimeAndKind(file);
+      return {
+        id: makeId(),
+        file,
+        mime,
+        isVideo,
+        alt: file.name,
+        name: file.name,
+      };
+    });
 
     setUploadError(null);
     setUploadRequestId(null);
@@ -581,12 +638,15 @@ export function MediaPicker({
         <p className="media-picker-accepts">
           {uploading ? "Uploading…" : "Drag files here, or"}
         </p>
+        <p className="media-picker-hint" style={{ marginTop: "4px", fontSize: "12px", color: "var(--p-color-subdued, #6d7175)" }}>
+          All image formats (JPG, PNG, GIF, WebP, SVG, AVIF, HEIC, etc.) and video (MP4, WebM, MOV, etc.)
+        </p>
 
         <div className="media-picker-actions">
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,video/*,.glb,.gltf"
+            accept="image/*,video/*,.jpg,.jpeg,.png,.gif,.webp,.svg,.bmp,.avif,.heic,.mp4,.webm,.mov,.avi,.ogv,.m4v,.glb,.gltf"
             multiple
             className="media-picker-hidden-input"
             onChange={handleFileChange}

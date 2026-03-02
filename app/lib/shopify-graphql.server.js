@@ -20,19 +20,46 @@ import { logServerError } from "../http.server.js";
  * @throws {GraphQLError}
  */
 export async function runGraphQL(graphql, { query, variables = {}, operationName }) {
-  const res = await graphql(query, { variables, operationName });
+  // Defensive guard — if query is empty the Shopify API returns "syntax error, unexpected end of file"
+  const queryStr = typeof query === "string" ? query.trim() : "";
+  if (!queryStr) {
+    console.error("[shopify-graphql] EMPTY_QUERY detected — query string is empty or undefined", { operationName });
+    throw {
+      code: "EMPTY_QUERY",
+      message: "GraphQL query string is empty (internal error)",
+      source: "INTERNAL",
+      retryable: false,
+    };
+  }
+
+  // Log query fingerprint (first 120 chars, no secrets) and variable key count for debugging
+  const querySnippet = queryStr.slice(0, 120).replace(/\s+/g, " ");
+  const varKeys = Object.keys(variables || {});
+  console.log(`[shopify-graphql] SEND op=${operationName ?? "?"} varKeys=[${varKeys.join(",")}] queryLen=${queryStr.length} query="${querySnippet}"`);
+
+  const res = await graphql(queryStr, { variables, operationName });
   const status = res?.status ?? (res.ok === false ? 500 : 200);
+  let rawText = "";
   let json;
   try {
-    json = await res.json();
+    // Use .text() + JSON.parse so we can log the raw body on failure.
+    // Fall back to .json() directly if .text() is not available (e.g. test mocks).
+    if (typeof res.text === "function") {
+      rawText = await res.text();
+      json = JSON.parse(rawText);
+    } else {
+      json = await res.json();
+    }
   } catch (e) {
-    logServerError("shopify-graphql.parse", e instanceof Error ? e : new Error(String(e)), { requestId: "[no-request]" });
+    // Log first 300 chars of raw body so we can see what Shopify actually returned
+    console.error("[shopify-graphql] PARSE_FAIL status=" + status + " raw=" + rawText.slice(0, 300));
+    logServerError("shopify-graphql.parse", e instanceof Error ? e : new Error(String(e)), { requestId: "[no-request]", status });
     throw {
       code: "GRAPHQL_PARSE",
-      message: "Failed to parse GraphQL response",
+      message: "Failed to parse GraphQL response (status " + status + ")",
       source: "SHOPIFY",
       retryable: true,
-      details: null,
+      details: { rawPreview: rawText.slice(0, 200) },
     };
   }
 
@@ -52,7 +79,9 @@ export async function runGraphQL(graphql, { query, variables = {}, operationName
   if (Array.isArray(topLevelErrors) && topLevelErrors.length > 0) {
     const first = topLevelErrors[0];
     const message = first?.message ?? "GraphQL error";
-    logServerError("shopify-graphql.errors", new Error(message), { requestId: "[no-request]" });
+    // Log the full error + query snippet to diagnose "syntax error, unexpected end of file"
+    console.error(`[shopify-graphql] TOP_LEVEL_ERROR op=${operationName ?? "?"} msg="${message}" extensions=${JSON.stringify(first?.extensions)} querySnippet="${querySnippet}"`);
+    logServerError("shopify-graphql.errors", new Error(message), { requestId: "[no-request]", operationName });
     throw {
       code: first?.extensions?.code ?? "GRAPHQL_ERROR",
       message,

@@ -198,10 +198,11 @@ export const action = async ({ request }) => {
   } catch (err) {
     logServerError("admin.add-product.action", err, { shop: session?.shop });
     const msg = err?.message ?? "";
-    const userMessage =
-      /syntax error|unexpected end of file|unexpected end of json/i.test(msg)
-        ? "Product data may be too large or was truncated. Try shortening the description and save again."
-        : (msg || "Could not create product.");
+    let userMessage = msg || "Could not create product.";
+    if (/syntax error|unexpected end of file|unexpected end of json|failed to parse graphql response/i.test(msg)) {
+      userMessage =
+        "Save failed (server or Shopify error). Check Vercel logs: if you see \"Can't reach database\", fix DATABASE_URL and ensure your database allows connections from Vercel. Otherwise try again in a moment.";
+    }
     return Response.json(
       { error: userMessage },
       { status: 502 }
