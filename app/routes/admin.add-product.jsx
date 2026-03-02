@@ -160,8 +160,8 @@ export const action = async ({ request }) => {
     ? submitMedia.filter((m) => m && m.originalSource && m.mediaContentType)
     : [];
 
-  // Cap description size to avoid oversized GraphQL variables and "syntax error, unexpected end of file"
-  const MAX_DESCRIPTION_CHARS = 500_000;
+  // Cap description so outbound Shopify GraphQL payload stays under limits (avoids "syntax error, unexpected end of file")
+  const MAX_DESCRIPTION_CHARS = 100_000;
   const safeDescription =
     descriptionHtml != null
       ? String(descriptionHtml).slice(0, MAX_DESCRIPTION_CHARS)

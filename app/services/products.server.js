@@ -201,9 +201,10 @@ export async function createProductFull(admin, options) {
     status,
     productType: productType?.trim() || "Vehicles",
   };
-  // Cap description to avoid oversized GraphQL variables and "syntax error, unexpected end of file"
+  // Keep GraphQL variables small to avoid Shopify "syntax error, unexpected end of file" (truncated request)
+  const MAX_DESCRIPTION_CHARS = 100_000; // ~100KB raw; JSON-escaped can be ~300KB
   if (descriptionHtml != null && descriptionHtml !== "") {
-    productInput.descriptionHtml = String(descriptionHtml).slice(0, 500_000);
+    productInput.descriptionHtml = String(descriptionHtml).slice(0, MAX_DESCRIPTION_CHARS);
   }
   if (vendor?.trim()) productInput.vendor = vendor.trim();
   if (Array.isArray(tags) && tags.length) productInput.tags = tags.filter(Boolean).map((t) => String(t).trim());
