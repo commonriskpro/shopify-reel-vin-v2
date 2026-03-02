@@ -90,6 +90,7 @@ const UPDATE_MUTATION = `#graphql
     }
   }
 `;
+// MetafieldDefinitionUpdateInput identifies by namespace+key+ownerType, NOT id
 
 const LIST_QUERY = `#graphql
   query listVinDecoderDefinitions {
@@ -137,7 +138,9 @@ export async function createVehicleMetafieldDefinitions(admin) {
         const res = await graphql(UPDATE_MUTATION, {
           variables: {
             definition: {
-              id: existingDef.id,
+              namespace: def.namespace,
+              key: def.key,
+              ownerType: "PRODUCT",
               name: def.name,
               description: def.description,
             },
