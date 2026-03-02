@@ -18,6 +18,7 @@ vi.mock("../app/services/vins.server.js", () => ({
   isValidVin: (v) => typeof v === "string" && /^[A-HJ-NPR-Z0-9]{8,17}$/.test(v),
 }));
 
+// Import via the shared handler (moved to .server.js to fix React Router bundling)
 const { loader } = await import("../app/routes/api.vins.jsx");
 
 describe("GET /api/vins envelope", () => {
