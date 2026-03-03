@@ -127,6 +127,37 @@ export async function reorderProductMedia(admin, { productId, mediaIds }) {
 }
 
 /**
+ * Delete media from a product (productDeleteMedia). Throws ApiError on userErrors.
+ * @param {import("@shopify/shopify-api").AdminApiContext} admin
+ * @param {{ productId: string; mediaIds: string[] }} options - product GID and media GIDs to delete
+ * @returns {Promise<{ deletedMediaIds: string[] }>}
+ */
+export async function deleteProductMedia(admin, { productId, mediaIds }) {
+  const graphql = admin?.graphql;
+  if (!graphql) throw new ApiError(500, "Admin GraphQL required");
+  if (!mediaIds?.length) return { deletedMediaIds: [] };
+
+  const { data } = await runGraphQLWithUserErrors(
+    graphql,
+    {
+      query: `#graphql
+      mutation productDeleteMedia($productId: ID!, $mediaIds: [ID!]!) {
+        productDeleteMedia(productId: $productId, mediaIds: $mediaIds) {
+          deletedMediaIds
+          mediaUserErrors { field message code }
+        }
+      }`,
+      variables: { productId, mediaIds },
+    },
+    "productDeleteMedia",
+    "mediaUserErrors"
+  );
+  const payload = data?.productDeleteMedia;
+  const deleted = payload?.deletedMediaIds ?? [];
+  return { deletedMediaIds: deleted };
+}
+
+/**
  * @deprecated Use attachMediaToProduct. Kept for compatibility.
  */
 export async function addProductMedia(admin, productId, media) {

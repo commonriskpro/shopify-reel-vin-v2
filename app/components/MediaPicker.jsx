@@ -121,12 +121,13 @@ export function MediaPicker({
   onMediaChange,
   disabled,
 }) {
-  // Five fetchers: product-media, files list, staged-uploads, add-product-media, reorder-product-media
+  // Six fetchers: product-media, files list, staged-uploads, add-product-media, reorder-product-media, delete-product-media
   const productMediaFetcher = useFetcher();
   const filesFetcher = useFetcher();
   const stagedFetcher = useFetcher();
   const addMediaFetcher = useFetcher();
   const reorderFetcher = useFetcher();
+  const deleteFetcher = useFetcher();
 
   const fileInputRef = useRef(null);
   const dropzoneRef = useRef(null);
@@ -419,6 +420,17 @@ export function MediaPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reorderFetcher.state, reorderFetcher.data]);
 
+  // After delete succeeds, refresh product media list and notify parent
+  useEffect(() => {
+    if (deleteFetcher.state !== "idle" || !deleteFetcher.data?.ok || !productId) return;
+    const media = deleteFetcher.data?.data?.media;
+    onMediaChange?.(Array.isArray(media) ? media : []);
+    productMediaFetcher.load(
+      `/admin/media?intent=product-media&productId=${encodeURIComponent(productId)}`
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deleteFetcher.state, deleteFetcher.data]);
+
   // Sync modal open state
   useEffect(() => {
     if (selectModalOpen && modalRef.current?.showOverlay) {
@@ -529,8 +541,22 @@ export function MediaPicker({
     onPendingMediaChange?.(pendingMedia.filter((_, i) => i !== index));
   };
 
+  const handleRemoveSaved = (index) => {
+    const m = currentMedia[index];
+    if (!m?.id || !productId || deleteFetcher.state !== "idle") return;
+    deleteFetcher.submit(
+      {
+        intent: "delete-product-media",
+        productId,
+        mediaIds: [m.id],
+      },
+      { method: "POST", encType: "application/json", action: "/admin/media" }
+    );
+  };
+
   const canReorderPending = isPendingMode && onPendingMediaChange && pendingMedia.length > 1;
   const reorderBusy = reorderFetcher.state !== "idle";
+  const deleteBusy = deleteFetcher.state !== "idle";
   const canReorder =
     (canReorderPending || (savedMediaWithIds && productId)) && !reorderBusy;
   const MEDIA_REORDER_TYPE = "application/x-shopify-media-index";
@@ -712,6 +738,17 @@ export function MediaPicker({
                     ×
                   </button>
                 )}
+                {hasProductId && m.id && (
+                  <button
+                    type="button"
+                    className="media-picker-thumb-remove"
+                    onClick={() => handleRemoveSaved(index)}
+                    disabled={deleteBusy}
+                    aria-label="Remove from product"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -778,14 +815,16 @@ export function MediaPicker({
           <p className="media-picker-hint">Create the product first to attach media.</p>
         )}
 
-        {(uploadError || mediaLoadError || (reorderFetcher.data && !reorderFetcher.data.ok && errorMsg(reorderFetcher.data))) && (
+        {(uploadError || mediaLoadError || (reorderFetcher.data && !reorderFetcher.data.ok && errorMsg(reorderFetcher.data)) || (deleteFetcher.data && !deleteFetcher.data.ok && errorMsg(deleteFetcher.data))) && (
           <s-banner tone="critical" style={{ marginTop: "12px" }}>
             <span>
               {mediaLoadIsNotFound
                 ? "Product or media not found."
                 : reorderFetcher.data && !reorderFetcher.data.ok
                   ? errorMsg(reorderFetcher.data)
-                  : uploadError || mediaLoadError}
+                  : deleteFetcher.data && !deleteFetcher.data.ok
+                    ? errorMsg(deleteFetcher.data)
+                    : uploadError || mediaLoadError}
             </span>
             {(uploadRequestId || mediaLoadRequestId) && (
               <span style={{ display: "block", marginTop: "6px", fontSize: "12px", opacity: 0.9 }}>

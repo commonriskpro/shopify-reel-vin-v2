@@ -33,7 +33,7 @@ import { logServerError } from "../http.server.js";
 import { ApiError } from "../lib/api.server.js";
 import { listFiles } from "../services/files.server.js";
 import { createStagedUploads } from "../services/staged-uploads.server.js";
-import { getProductMedia, attachMediaToProduct, reorderProductMedia } from "../services/product-media.server.js";
+import { getProductMedia, attachMediaToProduct, reorderProductMedia, deleteProductMedia } from "../services/product-media.server.js";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -113,6 +113,11 @@ const actionBodySchema = z.discriminatedUnion("intent", [
   }),
   z.object({
     intent: z.literal("reorder-product-media"),
+    productId: z.string().min(1).max(256),
+    mediaIds: z.array(z.string().min(1)).min(1, "mediaIds required"),
+  }),
+  z.object({
+    intent: z.literal("delete-product-media"),
     productId: z.string().min(1).max(256),
     mediaIds: z.array(z.string().min(1)).min(1, "mediaIds required"),
   }),
@@ -267,6 +272,22 @@ export const action = async ({ request }) => {
       logServerError("admin.media.reorder-product-media", e, { requestId });
       const status = e instanceof ApiError ? e.status : 502;
       return fail(e?.message ?? "Failed to reorder media", e?.code ?? "REORDER_FAILED", status, requestId);
+    }
+  }
+
+  // POST {intent: "delete-product-media", productId, mediaIds: [...]}
+  if (parsed.data.intent === "delete-product-media") {
+    try {
+      const result = await deleteProductMedia(admin, {
+        productId: parsed.data.productId,
+        mediaIds: parsed.data.mediaIds,
+      });
+      const { media } = await getProductMedia(admin, parsed.data.productId);
+      return ok({ deletedMediaIds: result.deletedMediaIds, media }, requestId);
+    } catch (e) {
+      logServerError("admin.media.delete-product-media", e, { requestId });
+      const status = e instanceof ApiError ? e.status : 502;
+      return fail(e?.message ?? "Failed to delete media", e?.code ?? "DELETE_MEDIA_FAILED", status, requestId);
     }
   }
 

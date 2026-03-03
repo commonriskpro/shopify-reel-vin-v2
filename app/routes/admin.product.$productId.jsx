@@ -244,12 +244,24 @@ export default function ProductEditorPage() {
               onInput={(e) => setTitle((e.currentTarget?.value ?? "").slice(0, 255))}
               placeholder="Product title"
             />
-            <s-text-area
-              label="Description"
-              value={descriptionHtml}
-              onInput={(e) => setDescriptionHtml(e.currentTarget?.value ?? "")}
-              placeholder="Describe your product..."
-            />
+            <div>
+              <s-text-area
+                label="Description"
+                value={descriptionHtml}
+                onInput={(e) => setDescriptionHtml(e.currentTarget?.value ?? "")}
+                placeholder="Describe your product..."
+              />
+              {descriptionHtml.trim() && (
+                <div style={{ marginTop: 12 }}>
+                  <s-text type="strong" tone="subdued" style={{ display: "block", marginBottom: 6, fontSize: 12 }}>Preview</s-text>
+                  <div
+                    className="rte"
+                    style={{ padding: 12, border: "1px solid #e1e3e5", borderRadius: 8, background: "#fafbfb", minHeight: 40, fontSize: 14, lineHeight: 1.5 }}
+                    dangerouslySetInnerHTML={{ __html: descriptionHtml.replace(/<script\b[\s\S]*?<\/script>/gi, "").replace(/<iframe\b[\s\S]*?<\/iframe>/gi, "") }}
+                  />
+                </div>
+              )}
+            </div>
             <div>
               <s-text type="strong" style={{ display: "block", marginBottom: 8 }}>Media</s-text>
               <MediaPicker
@@ -259,9 +271,9 @@ export default function ProductEditorPage() {
                 disabled={false}
               />
               <s-paragraph tone="subdued" style={{ marginTop: "12px" }}>
-                Drag thumbnails to reorder in the app.
+                Drag to reorder; use × on a thumbnail to remove. Upload or select existing to add more.
                 {productAdminUrl(shop, productIdGid) && (
-                  <>{" "}<a href={productAdminUrl(shop, productIdGid)} target="_top" rel="noopener noreferrer" style={{ color: "var(--p-color-text-link, #2c6ecb)", fontWeight: 500 }}>Open in Shopify</a> to replace or manage media.</>
+                  <>{" "}<a href={productAdminUrl(shop, productIdGid)} target="_top" rel="noopener noreferrer" style={{ color: "var(--p-color-text-link, #2c6ecb)", fontWeight: 500 }}>Open in Shopify</a> for more options.</>
                 )}
               </s-paragraph>
             </div>
