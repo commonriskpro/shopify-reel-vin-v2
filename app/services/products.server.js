@@ -632,6 +632,7 @@ export async function getProductForEditor(admin, productIdOrLegacy) {
         tags
         category { id }
         featuredImage { url }
+        seo { title description }
         variants(first: 1) {
           nodes {
             id
@@ -639,7 +640,7 @@ export async function getProductForEditor(admin, productIdOrLegacy) {
             compareAtPrice
             sku
             barcode
-            inventoryItem { id }
+            inventoryItem { id unitCost { amount } }
             inventoryPolicy
           }
         }
@@ -653,6 +654,8 @@ export async function getProductForEditor(admin, productIdOrLegacy) {
 
   const variant = p.variants?.nodes?.[0];
   const metafields = (p.metafields?.nodes ?? []).map((m) => ({ namespace: m.namespace, key: m.key, value: m.value ?? "" }));
+  const unitCost = variant?.inventoryItem?.unitCost;
+  const cost = unitCost?.amount != null ? String(unitCost.amount) : null;
   return {
     id: p.id,
     title: p.title ?? "",
@@ -663,6 +666,8 @@ export async function getProductForEditor(admin, productIdOrLegacy) {
     status: p.status ?? "ACTIVE",
     categoryId: p.category?.id ?? null,
     featuredImageUrl: p.featuredImage?.url ?? null,
+    seoTitle: p.seo?.title ?? "",
+    seoDescription: p.seo?.description ?? "",
     variant: variant
       ? {
           id: variant.id,
@@ -672,6 +677,7 @@ export async function getProductForEditor(admin, productIdOrLegacy) {
           barcode: variant.barcode ?? null,
           inventoryItemId: variant.inventoryItem?.id ?? null,
           inventoryPolicy: variant.inventoryPolicy ?? "DENY",
+          cost: cost ?? "",
         }
       : null,
     metafields,
@@ -682,7 +688,7 @@ export async function getProductForEditor(admin, productIdOrLegacy) {
  * Update an existing product (title, description, variant price, metafields). Does not replace media.
  * @param {import("@shopify/shopify-api").AdminApiContext} admin
  * @param {string} productIdGid
- * @param {object} payload - title, descriptionHtml, vendor, productType, tagsString, status, categoryId, price, compareAtPrice, sku, barcode, titleStatus, mileage, sellWhenOutOfStock
+ * @param {object} payload - title, descriptionHtml, vendor, productType, tagsString, status, categoryId, price, compareAtPrice, cost, sku, barcode, titleStatus, mileage, sellWhenOutOfStock, seoTitle, seoDescription
  */
 export async function updateProduct(admin, productIdGid, payload) {
   const graphql = admin?.graphql;
@@ -697,11 +703,14 @@ export async function updateProduct(admin, productIdGid, payload) {
     categoryId,
     price,
     compareAtPrice,
+    cost,
     sku,
     barcode,
     titleStatus,
     mileage,
     sellWhenOutOfStock,
+    seoTitle,
+    seoDescription,
   } = payload;
 
   const productInput = {
@@ -717,6 +726,11 @@ export async function updateProduct(admin, productIdGid, payload) {
     productInput.tags = tagsString.filter(Boolean).map((t) => sanitizeForGraphQL(String(t).trim()));
   } else if (typeof tagsString === "string") {
     productInput.tags = tagsString.split(",").map((t) => sanitizeForGraphQL(t.trim())).filter(Boolean);
+  }
+  if (seoTitle != null || seoDescription != null) {
+    productInput.seo = {};
+    if (seoTitle != null) productInput.seo.title = sanitizeForGraphQL(String(seoTitle).trim()).slice(0, 70);
+    if (seoDescription != null) productInput.seo.description = sanitizeForGraphQL(String(seoDescription).trim()).slice(0, 320);
   }
 
   await runGraphQLWithUserErrors(graphql, {
@@ -750,6 +764,19 @@ export async function updateProduct(admin, productIdGid, payload) {
         }`,
         variables: { productId: productIdGid, variants: [{ id: variantNode.id, ...rest }] },
       }, "productVariantsBulkUpdate");
+    }
+    if (cost != null && cost !== "" && variantNode.inventoryItem?.id) {
+      const costNum = parseFloat(String(cost).replace(/[^0-9.-]/g, ""));
+      if (!Number.isNaN(costNum)) {
+        try {
+          await runGraphQLWithUserErrors(graphql, {
+            query: `#graphql mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
+              inventoryItemUpdate(id: $id, input: $input) { userErrors { field message } }
+            }`,
+            variables: { id: variantNode.inventoryItem.id, input: { cost: costNum } },
+          }, "inventoryItemUpdate");
+        } catch (_) {}
+      }
     }
   }
 

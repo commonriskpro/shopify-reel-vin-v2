@@ -36,11 +36,14 @@ const actionSchema = z.object({
   categoryId: z.string().optional(),
   price: z.union([z.string(), z.number()]).optional(),
   compareAtPrice: z.union([z.string(), z.number()]).optional(),
+  cost: z.union([z.string(), z.number()]).optional(),
   sku: z.string().optional(),
   barcode: z.string().optional(),
   titleStatus: z.string().optional(),
   mileage: z.union([z.string(), z.number()]).optional(),
   sellWhenOutOfStock: z.boolean().optional(),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
 }).passthrough();
 
 export const loader = async ({ request, params }) => {
@@ -105,11 +108,14 @@ export const action = async ({ request, params }) => {
       categoryId: data.categoryId,
       price: data.price,
       compareAtPrice: data.compareAtPrice,
+      cost: data.cost,
       sku: data.sku,
       barcode: data.barcode,
       titleStatus: data.titleStatus,
       mileage: data.mileage,
       sellWhenOutOfStock: data.sellWhenOutOfStock,
+      seoTitle: data.seoTitle,
+      seoDescription: data.seoDescription,
     });
     return Response.json({ ok: true });
   } catch (err) {
@@ -137,6 +143,9 @@ export default function ProductEditorPage() {
   const [titleStatus, setTitleStatus] = useState("");
   const [mileage, setMileage] = useState("");
   const [sellWhenOutOfStock, setSellWhenOutOfStock] = useState(product?.variant?.inventoryPolicy === "CONTINUE");
+  const [cost, setCost] = useState(product?.variant?.cost ?? "");
+  const [seoTitle, setSeoTitle] = useState(product?.seoTitle ?? "");
+  const [seoDescription, setSeoDescription] = useState(product?.seoDescription ?? "");
 
   useEffect(() => {
     if (!product) return;
@@ -151,6 +160,9 @@ export default function ProductEditorPage() {
     setCompareAtPrice(product.variant?.compareAtPrice ?? "");
     setSku(product.variant?.sku ?? "");
     setBarcode(product.variant?.barcode ?? "");
+    setCost(product.variant?.cost ?? "");
+    setSeoTitle(product.seoTitle ?? "");
+    setSeoDescription(product.seoDescription ?? "");
     const titleMf = product.metafields?.find((m) => m.key === "title_status");
     const mileageMf = product.metafields?.find((m) => m.key === "mileage");
     setTitleStatus(titleMf?.value ?? "");
@@ -178,11 +190,14 @@ export default function ProductEditorPage() {
         categoryId,
         price,
         compareAtPrice,
+        cost: cost !== "" ? cost : undefined,
         sku,
         barcode,
         titleStatus: titleStatus.trim() || undefined,
         mileage: mileage.trim() !== "" ? mileage.trim() : undefined,
         sellWhenOutOfStock: !!sellWhenOutOfStock,
+        seoTitle: seoTitle.trim() || undefined,
+        seoDescription: seoDescription.trim() || undefined,
       },
       { method: "POST", encType: "application/json" }
     );
@@ -250,6 +265,9 @@ export default function ProductEditorPage() {
                 )}
               </s-paragraph>
             </div>
+            <s-text-field label="Vendor" value={vendor} onInput={(e) => setVendor(e.currentTarget?.value ?? "")} placeholder="Brand or manufacturer" />
+            <s-text-field label="Product type" value={productType} onInput={(e) => setProductType(e.currentTarget?.value ?? "")} placeholder="e.g. Vehicles" />
+            <s-text-field label="Tags" value={tagsString} onInput={(e) => setTagsString(e.currentTarget?.value ?? "")} placeholder="Comma-separated tags" helpText="Used for search and filters" />
             <div>
               <label htmlFor="edit-product-category" style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Category</label>
               <select
@@ -266,6 +284,11 @@ export default function ProductEditorPage() {
                 ))}
               </select>
             </div>
+            <div>
+              <s-text type="strong" style={{ display: "block", marginBottom: 8 }}>SEO</s-text>
+              <s-text-field label="SEO title" value={seoTitle} onInput={(e) => setSeoTitle((e.currentTarget?.value ?? "").slice(0, 70))} placeholder="Search listing title" helpText="Up to 70 characters" />
+              <s-text-area label="SEO description" value={seoDescription} onInput={(e) => setSeoDescription((e.currentTarget?.value ?? "").slice(0, 320))} placeholder="Search listing description" style={{ marginTop: 8 }} helpText="Up to 320 characters" />
+            </div>
           </s-stack>
         </s-section>
 
@@ -281,6 +304,19 @@ export default function ProductEditorPage() {
             </div>
             <s-text-field label="Price" value={price} onInput={(e) => setPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
             <s-text-field label="Compare at price" value={compareAtPrice} onInput={(e) => setCompareAtPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
+            <s-text-field label="Cost per item" value={cost} onInput={(e) => setCost(e.currentTarget?.value ?? "")} placeholder="0.00" helpText="Your cost for reporting" />
+            <s-text-field label="SKU" value={sku} onInput={(e) => setSku(e.currentTarget?.value ?? "")} placeholder="Optional" />
+            <s-text-field label="Barcode" value={barcode} onInput={(e) => setBarcode(e.currentTarget?.value ?? "")} placeholder="Optional" />
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                id="edit-product-sell-out"
+                checked={!!sellWhenOutOfStock}
+                onChange={(e) => setSellWhenOutOfStock(e.target.checked)}
+                aria-label="Sell when out of stock"
+              />
+              <label htmlFor="edit-product-sell-out" style={{ fontWeight: 500, fontSize: 14 }}>Sell when out of stock</label>
+            </div>
             <div>
               <s-text type="strong" style={{ display: "block", marginBottom: 8 }}>Vehicle details</s-text>
               <select id="edit-product-title-status" className="add-product-input" value={titleStatus} onChange={(e) => setTitleStatus(e.target.value)} aria-label="Title status" style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}>
