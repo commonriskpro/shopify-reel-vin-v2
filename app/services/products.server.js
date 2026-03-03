@@ -34,7 +34,7 @@ async function publishProductToOnlineStore(graphql, productId) {
     if (!onlineStorePub?.id) return "No Online Store publication found. Add read_publications scope and reinstall.";
     const { data: pubMutData } = await runGraphQL(graphql, {
       query: `#graphql mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
-        publishablePublish(id: $id, input: $input) { publishable { id } userErrors { field message } }
+        publishablePublish(id: $id, input: $input) { publishable { availablePublicationsCount { count } } userErrors { field message } }
       }`,
       variables: { id: productId, input: [{ publicationId: onlineStorePub.id }] },
     });
@@ -364,7 +364,7 @@ export async function createProductFull(admin, options) {
   }
 
   if (variantNode?.id) {
-    const variantUpdates = {};
+    const variantUpdates = { id: variantNode.id };
     if (price != null && price !== "") {
       const p = parseFloat(String(price).replace(/[^0-9.-]/g, ""));
       if (!Number.isNaN(p)) variantUpdates.price = String(p);
@@ -375,19 +375,30 @@ export async function createProductFull(admin, options) {
     }
     if (sku?.trim()) variantUpdates.sku = sku.trim();
     if (barcode?.trim()) variantUpdates.barcode = barcode.trim();
-    // Note: cost is set via inventoryItem.unitCost, not a top-level variant field.
-    variantUpdates.tracked = Boolean(trackInventory);
     variantUpdates.inventoryPolicy = sellWhenOutOfStock ? "CONTINUE" : "DENY";
+    // Tracked and cost live on inventoryItem; ProductVariantsBulkInput.inventoryItem accepts them.
+    if (trackInventory) {
+      variantUpdates.inventoryItem = { tracked: true };
+      if (cost != null && cost !== "") {
+        const costNum = parseFloat(String(cost).replace(/[^0-9.-]/g, ""));
+        if (!Number.isNaN(costNum)) variantUpdates.inventoryItem.cost = String(costNum);
+      }
+    }
 
-    if (Object.keys(variantUpdates).length > 0) {
+    if (Object.keys(variantUpdates).length > 1) {
       try {
+        const { id: _id, ...rest } = variantUpdates;
         await runGraphQLWithUserErrors(graphql, {
           query: `#graphql mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
             productVariantsBulkUpdate(productId: $productId, variants: $variants) { userErrors { field message } }
           }`,
-          variables: { productId, variants: [{ id: variantNode.id, ...variantUpdates }] },
+          variables: { productId, variants: [{ id: variantNode.id, ...rest }] },
         }, "productVariantsBulkUpdate");
-      } catch (_) {}
+      } catch (err) {
+        const msg = err?.message ?? "";
+        if (!/USER_ERRORS/.test(String(err?.code))) throw err;
+        warnings.push({ code: "VARIANT_NOT_UPDATED", message: msg || "Could not update variant price/inventory." });
+      }
     }
 
     if (variantNode.inventoryItem?.id && trackInventory) {
@@ -413,6 +424,27 @@ export async function createProductFull(admin, options) {
             warnings.push({ code: "INVENTORY_NOT_SET", message: msg || "Could not activate inventory." });
           }
         }
+        // Explicitly set quantity to 1 so "Available" and "On hand" show 1 by default (inventoryActivate can leave 0 on some API versions).
+        try {
+          const { data: setQtyData } = await runGraphQL(graphql, {
+            query: `#graphql mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) {
+              inventorySetQuantities(input: $input) { userErrors { code message } }
+            }`,
+            variables: {
+              input: {
+                name: "available",
+                reason: "correction",
+                ignoreCompareQuantity: true,
+                quantities: [{ inventoryItemId: invItemId, locationId, quantity: 1 }],
+              },
+            },
+          });
+          const setQtyErrs = setQtyData?.inventorySetQuantities?.userErrors ?? [];
+          const qtyMsgs = setQtyErrs.map((e) => e?.message || e?.code).filter(Boolean);
+          if (qtyMsgs.length > 0 && !/already active|not allowed to set available quantity when the item is already active/i.test(qtyMsgs.join(" "))) {
+            warnings.push({ code: "INVENTORY_NOT_SET", message: qtyMsgs.join("; ") });
+          }
+        } catch (_) {}
       } else {
         warnings.push({ code: "INVENTORY_NOT_SET", message: "Could not find a location for inventory." });
       }
@@ -512,4 +544,235 @@ export async function listProductsMissingMilesOrTitle(admin) {
     after = endCursor;
   }
   return missing;
+}
+
+/**
+ * List products for admin product list page (Shopify-style table).
+ * @param {import("@shopify/shopify-api").AdminApiContext} admin
+ * @param {{ first?: number; after?: string | null; query?: string | null }} options
+ * @returns {Promise<{ products: Array<{ id: string; title: string; status: string; legacyResourceId: string; featuredImageUrl: string | null; productType: string; categoryName: string | null; inventoryDisplay: string; channelsCount?: number }>; pageInfo: { hasNextPage: boolean; endCursor: string | null } }>}
+ */
+export async function listProductsForAdmin(admin, { first = 50, after = null, query = null } = {}) {
+  const graphql = admin?.graphql;
+  if (!graphql) return { products: [], pageInfo: { hasNextPage: false, endCursor: null } };
+  const gqlQuery = `#graphql
+    query adminProductList($first: Int!, $after: String, $query: String) {
+      products(first: $first, after: $after, query: $query, sortKey: UPDATED_AT, reverse: true) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          title
+          status
+          productType
+          featuredImage { url }
+          category { name fullName }
+          variants(first: 1) {
+            nodes {
+              inventoryItem { id }
+              sellableOnlineQuantity
+            }
+          }
+          resourcePublicationsCount { count }
+        }
+      }
+    }
+  `;
+  const variables = { first, after, query };
+  if (query == null || query === "") delete variables.query;
+  if (after == null || after === "") delete variables.after;
+  const { data } = await runGraphQL(graphql, { query: gqlQuery, variables, operationName: "adminProductList" });
+  const nodes = data?.products?.nodes ?? [];
+  const pageInfo = data?.products?.pageInfo ?? { hasNextPage: false, endCursor: null };
+  const products = nodes.map((p) => {
+    const legacyResourceId = (p.id ?? "").replace(/^gid:\/\/shopify\/Product\//, "");
+    const variant = p.variants?.nodes?.[0];
+    const hasInventoryItem = variant?.inventoryItem?.id != null;
+    const inventoryDisplay = !hasInventoryItem
+      ? "Not tracked"
+      : `${variant?.sellableOnlineQuantity ?? 0} in stock`;
+    const categoryName = p.category?.fullName || p.category?.name || null;
+    return {
+      id: p.id,
+      title: p.title ?? "Untitled",
+      status: p.status ?? "DRAFT",
+      legacyResourceId,
+      featuredImageUrl: p.featuredImage?.url ?? null,
+      productType: p.productType ?? "",
+      categoryName,
+      inventoryDisplay,
+      channelsCount: p.resourcePublicationsCount?.count ?? 0,
+    };
+  });
+  return { products, pageInfo };
+}
+
+/**
+ * Get a single product for the in-app editor. Accepts GID or legacy numeric id.
+ * @param {import("@shopify/shopify-api").AdminApiContext} admin
+ * @param {string} productIdOrLegacy - GID (gid://shopify/Product/123) or legacy id (123)
+ * @returns {Promise<{ id: string; title: string; descriptionHtml: string; vendor: string; productType: string; tags: string[]; status: string; categoryId: string | null; featuredImageUrl: string | null; variant: { id: string; price: string; compareAtPrice: string | null; sku: string | null; barcode: string | null; inventoryItemId: string | null; inventoryPolicy: string }; metafields: Array<{ namespace: string; key: string; value: string }> } | null>}
+ */
+export async function getProductForEditor(admin, productIdOrLegacy) {
+  const graphql = admin?.graphql;
+  if (!graphql) return null;
+  const productId = productIdOrLegacy.startsWith("gid://")
+    ? productIdOrLegacy
+    : `gid://shopify/Product/${productIdOrLegacy.replace(/\D/g, "")}`;
+  if (!productId.replace(/^gid:\/\/shopify\/Product\//, "")) return null;
+
+  const query = `#graphql
+    query getProductForEditor($id: ID!) {
+      product(id: $id) {
+        id
+        title
+        descriptionHtml
+        vendor
+        productType
+        status
+        tags
+        category { id }
+        featuredImage { url }
+        variants(first: 1) {
+          nodes {
+            id
+            price
+            compareAtPrice
+            sku
+            barcode
+            inventoryItem { id }
+            inventoryPolicy
+          }
+        }
+        metafields(namespace: "vin_decoder", first: 20) { namespace key value }
+      }
+    }
+  `;
+  const { data } = await runGraphQL(graphql, { query, variables: { id: productId }, operationName: "getProductForEditor" });
+  const p = data?.product;
+  if (!p?.id) return null;
+
+  const variant = p.variants?.nodes?.[0];
+  const metafields = (p.metafields ?? []).map((m) => ({ namespace: m.namespace, key: m.key, value: m.value ?? "" }));
+  return {
+    id: p.id,
+    title: p.title ?? "",
+    descriptionHtml: p.descriptionHtml ?? "",
+    vendor: p.vendor ?? "",
+    productType: p.productType ?? "Vehicles",
+    tags: Array.isArray(p.tags) ? p.tags : [],
+    status: p.status ?? "ACTIVE",
+    categoryId: p.category?.id ?? null,
+    featuredImageUrl: p.featuredImage?.url ?? null,
+    variant: variant
+      ? {
+          id: variant.id,
+          price: variant.price ?? "0",
+          compareAtPrice: variant.compareAtPrice ?? null,
+          sku: variant.sku ?? null,
+          barcode: variant.barcode ?? null,
+          inventoryItemId: variant.inventoryItem?.id ?? null,
+          inventoryPolicy: variant.inventoryPolicy ?? "DENY",
+        }
+      : null,
+    metafields,
+  };
+}
+
+/**
+ * Update an existing product (title, description, variant price, metafields). Does not replace media.
+ * @param {import("@shopify/shopify-api").AdminApiContext} admin
+ * @param {string} productIdGid
+ * @param {object} payload - title, descriptionHtml, vendor, productType, tagsString, status, categoryId, price, compareAtPrice, sku, barcode, titleStatus, mileage, sellWhenOutOfStock
+ */
+export async function updateProduct(admin, productIdGid, payload) {
+  const graphql = admin?.graphql;
+  if (!graphql) throw new Error("Admin GraphQL required");
+  const {
+    title,
+    descriptionHtml,
+    vendor,
+    productType,
+    tagsString,
+    status,
+    categoryId,
+    price,
+    compareAtPrice,
+    sku,
+    barcode,
+    titleStatus,
+    mileage,
+    sellWhenOutOfStock,
+  } = payload;
+
+  const productInput = {
+    id: productIdGid,
+    title: title != null ? sanitizeForGraphQL(String(title).trim().slice(0, 255)) : undefined,
+    descriptionHtml: descriptionHtml != null ? sanitizeForGraphQL(descriptionHtml) : undefined,
+    vendor: vendor != null ? sanitizeForGraphQL(String(vendor).trim()) : undefined,
+    productType: productType != null ? sanitizeForGraphQL(String(productType).trim()) : undefined,
+    status: status === "ACTIVE" || status === "DRAFT" || status === "ARCHIVED" ? status : undefined,
+    category: categoryId?.trim() ? categoryId.trim() : undefined,
+  };
+  if (Array.isArray(tagsString)) {
+    productInput.tags = tagsString.filter(Boolean).map((t) => sanitizeForGraphQL(String(t).trim()));
+  } else if (typeof tagsString === "string") {
+    productInput.tags = tagsString.split(",").map((t) => sanitizeForGraphQL(t.trim())).filter(Boolean);
+  }
+
+  await runGraphQLWithUserErrors(graphql, {
+    query: `#graphql mutation productUpdate($input: ProductInput!) { productUpdate(input: $input) { userErrors { field message } } }`,
+    variables: { input: productInput },
+  }, "productUpdate");
+
+  const { data: vData } = await runGraphQL(graphql, {
+    query: `#graphql query getFirstVariant($id: ID!) { product(id: $id) { variants(first: 1) { nodes { id inventoryItem { id } } } } }`,
+    variables: { id: productIdGid },
+  });
+  const variantNode = vData?.product?.variants?.nodes?.[0];
+  if (variantNode?.id) {
+    const variantUpdates = { id: variantNode.id };
+    if (price != null && price !== "") {
+      const p = parseFloat(String(price).replace(/[^0-9.-]/g, ""));
+      if (!Number.isNaN(p)) variantUpdates.price = String(p);
+    }
+    if (compareAtPrice != null && compareAtPrice !== "") {
+      const cp = parseFloat(String(compareAtPrice).replace(/[^0-9.-]/g, ""));
+      if (!Number.isNaN(cp)) variantUpdates.compareAtPrice = String(cp);
+    }
+    if (sku?.trim()) variantUpdates.sku = sku.trim();
+    if (barcode?.trim()) variantUpdates.barcode = barcode.trim();
+    variantUpdates.inventoryPolicy = sellWhenOutOfStock ? "CONTINUE" : "DENY";
+    if (Object.keys(variantUpdates).length > 1) {
+      const { id: _id, ...rest } = variantUpdates;
+      await runGraphQLWithUserErrors(graphql, {
+        query: `#graphql mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+          productVariantsBulkUpdate(productId: $productId, variants: $variants) { userErrors { field message } }
+        }`,
+        variables: { productId: productIdGid, variants: [{ id: variantNode.id, ...rest }] },
+      }, "productVariantsBulkUpdate");
+    }
+  }
+
+  const vinDecoderMetafields = [];
+  const validTitleStatuses = ["Clean", "Rebuilt", "Salvage", "Junk", "Flood"];
+  if (titleStatus && validTitleStatuses.includes(String(titleStatus).trim())) {
+    vinDecoderMetafields.push({ namespace: "vin_decoder", key: "title_status", type: "single_line_text_field", value: String(titleStatus).trim() });
+  }
+  if (mileage != null && mileage !== "") {
+    const mileageNum = typeof mileage === "number" ? mileage : parseInt(String(mileage).replace(/\D/g, ""), 10);
+    if (!Number.isNaN(mileageNum) && mileageNum >= 0) {
+      vinDecoderMetafields.push({ namespace: "vin_decoder", key: "mileage", type: "number_integer", value: String(mileageNum) });
+    }
+  }
+  if (vinDecoderMetafields.length > 0) {
+    await runGraphQLWithUserErrors(graphql, {
+      query: `#graphql mutation productUpdate($input: ProductInput!) { productUpdate(input: $input) { userErrors { field message } } }`,
+      variables: {
+        input: {
+          id: productIdGid,
+          metafields: vinDecoderMetafields.map((m) => ({ namespace: m.namespace, key: m.key, type: m.type, value: m.value })),
+        },
+      },
+    }, "productUpdate");
+  }
 }

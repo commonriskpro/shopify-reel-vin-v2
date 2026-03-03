@@ -134,6 +134,8 @@ export function MediaPicker({
   // ---- UI state ----
   const [selectModalOpen, setSelectModalOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [dragMediaIndex, setDragMediaIndex] = useState(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState(null);
   const [filesState, setFilesState] = useState({
     loading: false,
     error: null,
@@ -470,15 +472,18 @@ export function MediaPicker({
     if (files.length) processFiles(files);
   };
 
-  // Drag-and-drop
+  // Drag-and-drop (don't show file-upload overlay when reordering thumbnails — keeps photos visible)
+  const isMediaReorderDrag = (e) => e.dataTransfer?.types?.includes("application/x-shopify-media-index");
   const handleDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isMediaReorderDrag(e)) return;
     if (!disabled && !uploading) setIsDragOver(true);
   };
   const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isMediaReorderDrag(e)) return;
     if (!disabled && !uploading) setIsDragOver(true);
   };
   const handleDragLeave = (e) => {
@@ -494,6 +499,7 @@ export function MediaPicker({
     e.stopPropagation();
     setIsDragOver(false);
     if (disabled || uploading) return;
+    if (e.dataTransfer.types.includes("application/x-shopify-media-index")) return;
     const files = Array.from(e.dataTransfer.files);
     if (files.length) processFiles(files);
   };
@@ -510,6 +516,48 @@ export function MediaPicker({
     const item = pendingMedia[index];
     if (item?.previewUrl?.startsWith?.("blob:")) URL.revokeObjectURL(item.previewUrl);
     onPendingMediaChange?.(pendingMedia.filter((_, i) => i !== index));
+  };
+
+  const canReorder = isPendingMode && onPendingMediaChange && pendingMedia.length > 1;
+  const MEDIA_REORDER_TYPE = "application/x-shopify-media-index";
+
+  const handleMediaDragStart = (e, index) => {
+    if (!canReorder) return;
+    e.dataTransfer.setData(MEDIA_REORDER_TYPE, String(index));
+    e.dataTransfer.effectAllowed = "move";
+    setDragMediaIndex(index);
+  };
+
+  const handleMediaDragEnd = () => {
+    setDragMediaIndex(null);
+    setDropTargetIndex(null);
+  };
+
+  const handleMediaDragOver = (e, index) => {
+    if (!canReorder || dragMediaIndex == null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropTargetIndex(index);
+  };
+
+  const handleMediaDragLeave = () => {
+    setDropTargetIndex(null);
+  };
+
+  const handleMediaDrop = (e, dropIndex) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!canReorder || dragMediaIndex == null || dragMediaIndex === dropIndex) {
+      setDragMediaIndex(null);
+      setDropTargetIndex(null);
+      return;
+    }
+    const next = [...pendingMedia];
+    const [removed] = next.splice(dragMediaIndex, 1);
+    next.splice(dropIndex, 0, removed);
+    onPendingMediaChange?.(next);
+    setDragMediaIndex(null);
+    setDropTargetIndex(null);
   };
 
   const handlePickFile = (file) => {
@@ -588,12 +636,27 @@ export function MediaPicker({
         {currentMedia.length > 0 && (
           <div className="media-picker-thumbnails">
             {currentMedia.map((m, index) => (
-              <div key={m.id || index} className="media-picker-thumb">
+              <div
+                key={m.id || index}
+                className={`media-picker-thumb${dragMediaIndex === index ? " media-picker-thumb--dragging" : ""}${dropTargetIndex === index ? " media-picker-thumb--drop-target" : ""}`}
+                draggable={canReorder}
+                onDragStart={(e) => handleMediaDragStart(e, index)}
+                onDragEnd={handleMediaDragEnd}
+                onDragOver={(e) => handleMediaDragOver(e, index)}
+                onDragLeave={handleMediaDragLeave}
+                onDrop={(e) => handleMediaDrop(e, index)}
+              >
+                {canReorder && (
+                  <span className="media-picker-thumb-grip" aria-hidden="true" title="Drag to reorder">
+                    ⋮⋮
+                  </span>
+                )}
                 <img
                   src={getDisplayUrl(m, isPendingMode) || ""}
                   alt={m.alt || ""}
                   loading="lazy"
                   onError={(e) => { e.target.style.display = "none"; }}
+                  draggable={false}
                 />
                 {m.mediaContentType === "VIDEO" && (
                   <span className="media-picker-thumb-badge">Video</span>

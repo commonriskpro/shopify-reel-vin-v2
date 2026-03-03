@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Outlet, useLoaderData, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
@@ -59,7 +59,9 @@ export const loader = async ({ request }) => {
 
 export default function App() {
   const { apiKey } = useLoaderData();
+  const location = useLocation();
   const [showFallback, setShowFallback] = useState(true);
+  const search = location?.search ?? "";
 
   useEffect(() => {
     setShowFallback(false);
@@ -102,9 +104,10 @@ export default function App() {
         </div>
       )}
       <s-app-nav>
-        <s-link href="/admin/add-product">Add product (full)</s-link>
-        <s-link href="/admin/reels">Shoppable Reels</s-link>
-        <s-link href="/admin/setup">Filter Setup</s-link>
+        <s-link href={`/admin/products${search}`}>Products</s-link>
+        <s-link href={`/admin/add-product${search}`}>Add product (full)</s-link>
+        <s-link href={`/admin/reels${search}`}>Shoppable Reels</s-link>
+        <s-link href={`/admin/setup${search}`}>Filter Setup</s-link>
       </s-app-nav>
       <Outlet />
     </AppProvider>
@@ -113,6 +116,8 @@ export default function App() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
+  const location = useLocation();
+  const search = location?.search ?? "";
   const isRedirect =
     error?.constructor?.name === "ErrorResponse" ||
     error?.constructor?.name === "ErrorResponseImpl";
@@ -133,7 +138,7 @@ export function ErrorBoundary() {
         The app hit an error. You can try reopening it from Shopify Admin or refreshing the page.
       </p>
       <a
-        href="/admin"
+        href={`/admin${search}`}
         style={{
           display: "inline-block",
           padding: "0.5rem 1rem",

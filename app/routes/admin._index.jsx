@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useFetcher, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData, redirect } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { z } from "zod";
@@ -11,8 +11,12 @@ import { enforceRateLimit, isValidVin, normalizeVin } from "../security.server.j
 import { getWarnings } from "../lib/api-client.js";
 
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  return { shop: session?.shop ?? "" };
+  await authenticate.admin(request);
+  // Keep redirect in embedded context: preserve shop, host, embedded, _app so iframe auth is not lost
+  const url = new URL(request.url);
+  const search = url.searchParams.toString();
+  const to = search ? `/admin/add-product?${search}` : "/admin/add-product";
+  throw redirect(to);
 };
 
 const actionBodySchema = z.object({

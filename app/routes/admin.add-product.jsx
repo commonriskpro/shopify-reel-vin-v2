@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useFetcher, useLoaderData } from "react-router";
+import { Link, useFetcher, useLoaderData, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { z } from "zod";
 import { authenticate } from "../shopify.server";
@@ -240,6 +240,7 @@ const STATUS_OPTIONS = [
 
 export default function AddProduct() {
   const { shop, categories, defaultCategoryId } = useLoaderData() ?? {};
+  const location = useLocation();
   const fetcher = useFetcher();
   const decodeFetcher = useFetcher();
   const [vin, setVin] = useState("");
@@ -367,7 +368,7 @@ export default function AddProduct() {
     <s-page heading="Add product">
       <div className="add-product-page">
         <div className="add-product-breadcrumb">
-          <Link to="/admin">App</Link>
+          <Link to={`/admin${location?.search ?? ""}`}>App</Link>
           <span> › Add product</span>
         </div>
 
@@ -485,6 +486,38 @@ export default function AddProduct() {
 
             {/* Right column – sidebar */}
             <div>
+              <div className="add-product-card">
+                <label className="add-product-label" htmlFor="add-product-vin">VIN decoder</label>
+                <p className="add-product-hint" style={{ marginBottom: "8px" }}>
+                  Enter a VIN and click Decode to auto-fill title, description, vendor, and tags.
+                </p>
+                <div style={{ display: "flex", gap: "8px", alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <input
+                    id="add-product-vin"
+                    type="text"
+                    className="add-product-input"
+                    value={vin}
+                    onChange={(e) => setVin((e.target?.value ?? "").toUpperCase().slice(0, VIN_LENGTH))}
+                    placeholder="e.g. 1HGBH41JXMN109186"
+                    maxLength={VIN_LENGTH}
+                    style={{ flex: "1", minWidth: "140px" }}
+                  />
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    disabled={vin.trim().length < 8 || decodeBusy}
+                    onClick={handleDecode}
+                    {...(decodeBusy ? { loading: true } : {})}
+                  >
+                    Decode VIN
+                  </s-button>
+                </div>
+                <p className="add-product-hint" style={{ marginTop: "6px" }}>{vin.length}/{VIN_LENGTH} characters</p>
+                {decodeError && (
+                  <s-banner tone="critical" style={{ marginTop: "8px" }}>{decodeError}</s-banner>
+                )}
+              </div>
+
               <div className="add-product-card">
                 <label className="add-product-label" htmlFor="add-product-status">Status</label>
                 <select
