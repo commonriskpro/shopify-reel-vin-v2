@@ -47,32 +47,25 @@ export const action = async ({ request }) => {
   return Response.json({ ok: allOk, results });
 };
 
-// Status badge helper
+// Status badge using Polaris s-badge
 function StatusBadge({ status }) {
-  const map = {
-    created: { label: "Created",      color: "#008060", bg: "#f4faf6", border: "#b3e0c6" },
-    updated: { label: "Updated",      color: "#2c6ecb", bg: "#f0f5ff", border: "#b9d4f7" },
-    ok:      { label: "Already set",  color: "#6d7175", bg: "#f6f6f7", border: "#e3e3e3" },
-    exists:  { label: "Already set",  color: "#6d7175", bg: "#f6f6f7", border: "#e3e3e3" },
-    error:   { label: "Error",        color: "#b04545", bg: "#fff8f8", border: "#fbb"    },
+  const toneMap = {
+    created: "success",
+    updated: "info",
+    ok: "subdued",
+    exists: "subdued",
+    error: "critical",
   };
-  const s = map[status] || map.error;
-  return (
-    <span
-      style={{
-        fontSize: 11,
-        fontWeight: 600,
-        padding: "2px 7px",
-        borderRadius: 10,
-        color: s.color,
-        background: s.bg,
-        border: `1px solid ${s.border}`,
-        flexShrink: 0,
-      }}
-    >
-      {s.label}
-    </span>
-  );
+  const labelMap = {
+    created: "Created",
+    updated: "Updated",
+    ok: "Already set",
+    exists: "Already set",
+    error: "Error",
+  };
+  const tone = toneMap[status] || "critical";
+  const label = labelMap[status] || "Error";
+  return <s-badge tone={tone} color="strong">{label}</s-badge>;
 }
 
 export default function SetupPage() {
@@ -113,47 +106,25 @@ export default function SetupPage() {
 
         {/* Results table */}
         {results && (
-          <div style={{ marginTop: 12 }}>
+          <s-stack direction="block" gap="base" style={{ marginTop: 12 }}>
             {allOk ? (
-              <s-banner tone="success" style={{ marginBottom: 12 }}>
-                All definitions are ready. Complete Step 2 below.
-              </s-banner>
+              <s-banner tone="success">All definitions are ready. Complete Step 2 below.</s-banner>
             ) : (
-              <s-banner tone="warning" style={{ marginBottom: 12 }}>
-                Some definitions could not be created — see details below.
-              </s-banner>
+              <s-banner tone="warning">Some definitions could not be created — see details below.</s-banner>
             )}
-            <div
-              style={{
-                border: "1px solid #e3e3e3",
-                borderRadius: 8,
-                overflow: "hidden",
-              }}
-            >
-              {results.map((r, i) => (
-                <div
-                  key={r.key}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "10px 14px",
-                    background: i % 2 === 0 ? "#fff" : "#fafbfb",
-                    borderBottom: i < results.length - 1 ? "1px solid #f1f1f1" : "none",
-                  }}
-                >
-                  <span style={{ fontWeight: 600, minWidth: 100, fontSize: 13 }}>{r.name}</span>
-                  <code style={{ fontSize: 11, color: "#6d7175", flex: 1 }}>
-                    vin_decoder.{r.key}
-                  </code>
-                  <StatusBadge status={r.status} />
-                  {r.error && (
-                    <span style={{ fontSize: 11, color: "#b04545", maxWidth: 200 }}>{r.error}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+            <s-box padding="base" borderWidth="base" borderRadius="base" background="surface">
+              <s-stack direction="block" gap="tight">
+                {results.map((r) => (
+                  <s-stack key={r.key} direction="inline" gap="base" style={{ alignItems: "center", flexWrap: "wrap" }}>
+                    <s-text type="strong" style={{ minWidth: 100 }}>{r.name}</s-text>
+                    <s-text tone="subdued"><code>vin_decoder.{r.key}</code></s-text>
+                    <StatusBadge status={r.status} />
+                    {r.error && <s-text tone="critical" style={{ fontSize: 11, maxWidth: 200 }}>{r.error}</s-text>}
+                  </s-stack>
+                ))}
+              </s-stack>
+            </s-box>
+          </s-stack>
         )}
       </s-section>
 
@@ -163,16 +134,7 @@ export default function SetupPage() {
           After Step 1, go to your Shopify admin and enable each filter:
         </s-paragraph>
 
-        <div
-          style={{
-            background: "#f6f6f7",
-            borderRadius: 8,
-            padding: "16px 20px",
-            margin: "12px 0",
-            fontSize: 14,
-            lineHeight: 1.7,
-          }}
-        >
+        <s-box padding="base" background="subdued" borderRadius="base" style={{ margin: "12px 0", fontSize: 14, lineHeight: 1.7 }}>
           <strong>1.</strong> Open{" "}
           <a
             href="https://admin.shopify.com/store/speedy-motor-group/apps/search-and-discovery"
@@ -196,7 +158,7 @@ export default function SetupPage() {
             ))}
           </ul>
           <strong>5.</strong> Click <strong>Save</strong>
-        </div>
+        </s-box>
 
         <s-paragraph>
           Your <strong>/inventory/</strong> collection page will immediately show the filter

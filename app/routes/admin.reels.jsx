@@ -497,28 +497,18 @@ export default function ReelsPage() {
             {homepageToggleFetcher.data.error || "Could not update setting."}
           </s-banner>
         )}
-        <div
-          className="reels-homepage-toggle-row"
-          role="button"
-          tabIndex={0}
-          onClick={(e) => { e.preventDefault(); if (!toggleBusy) handleHomepageToggle(); }}
-          onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !toggleBusy) { e.preventDefault(); handleHomepageToggle(); } }}
-          aria-checked={showReelsOnHomepage}
-          aria-label="Show reels on store homepage"
-          aria-busy={toggleBusy}
-        >
-          <input
-            type="checkbox"
+        <s-stack direction="inline" gap="base" style={{ alignItems: "center" }}>
+          <s-checkbox
             checked={!!showReelsOnHomepage}
+            onChange={() => { if (!toggleBusy) handleHomepageToggle(); }}
             disabled={toggleBusy}
-            readOnly
-            style={{ width: 18, height: 18, pointerEvents: "none" }}
+            aria-label="Show reels on store homepage"
           />
-          <span className="reels-homepage-toggle-label">Show reels on store homepage</span>
-        </div>
-        <p className="reels-homepage-toggle-desc">
+          <s-text type="strong">Show reels on store homepage</s-text>
+        </s-stack>
+        <s-paragraph tone="subdued" style={{ marginTop: 8 }}>
           When on, the Shoppable Reels section appears on your store’s homepage (Shopify home). When off, it is hidden there.
-        </p>
+        </s-paragraph>
       </s-section>
       <s-section heading="Link products to reels">
         <div className="reels-ui-shell" aria-live="polite" aria-busy={syncBusy}>
@@ -558,10 +548,10 @@ export default function ReelsPage() {
             <s-banner tone="success">Import complete. New reels imported: {syncFetcher.data.inserted ?? 0}</s-banner>
           )}
           <div className="reels-gallery">
-            <h3 className="reels-gallery-title">Video Gallery</h3>
-            <p className="reels-gallery-subtitle">
+            <s-heading>Video Gallery</s-heading>
+            <s-paragraph tone="subdued" style={{ marginTop: 4 }}>
               Import videos from your Instagram or TikTok account to display on your store.
-            </p>
+            </s-paragraph>
             {error && (
               <s-banner tone="critical">
                 Could not load reels: {error}
@@ -569,8 +559,8 @@ export default function ReelsPage() {
             )}
             {reels && reels.length === 0 ? (
               <div className="reels-empty-state">
-                <p className="reels-empty-state-heading">No reels yet</p>
-                <p className="reels-empty-state-desc">
+                <s-text type="strong" style={{ display: "block", marginBottom: 8 }}>No reels yet</s-text>
+                <s-paragraph tone="subdued">
                   Import videos from Instagram using the <strong>Import</strong> button above, or run a sync from your Reels API (
                 <a href={reelsApiUrl ? `${reelsApiUrl.replace(/\/$/, "")}/api/sync` : "#"} target="_blank" rel="noopener noreferrer" className="reels-link-underline">
                   {reelsApiUrl ? `${reelsApiUrl.replace(/\/$/, "")}/api/sync` : "/api/sync"}
@@ -581,7 +571,7 @@ export default function ReelsPage() {
                   {reelsApiUrl ? `${reelsApiUrl.replace(/\/$/, "")}/api/reels` : "/api/reels"}
                 </a>{" "}
                 in the browser and check if <code>reels</code> is empty there too.
-                </p>
+                </s-paragraph>
               </div>
             ) : (
               <div className="reels-grid">

@@ -2,7 +2,7 @@
  * Sync metafields: run definition sync + pin Title/Miles, list products missing Miles or Title (for older vehicles).
  * Full hardening: loader never throws; errors returned as data and shown in UI; structured logging for Vercel.
  */
-import { useLoaderData, useFetcher } from "react-router";
+import { Link, useLoaderData, useFetcher, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { createVehicleMetafieldDefinitions } from "../services/metafield-definitions.server.js";
@@ -96,6 +96,8 @@ function AdminProductLink({ shop, legacyResourceId, children }) {
 
 export default function SyncMetafieldsPage() {
   const loaderData = useLoaderData() ?? {};
+  const location = useLocation();
+  const preserveQs = location?.search ?? "";
   const fetcher = useFetcher();
   // When "List products" is clicked we load via fetcher (same session, no full-page nav that triggers auth redirect)
   const data = fetcher.data ?? loaderData;
@@ -107,7 +109,7 @@ export default function SyncMetafieldsPage() {
         <s-banner tone="critical" style={{ marginBottom: 16 }}>
           {error}
           <br />
-          <a href="/admin/sync-metafields" style={{ marginTop: 8, display: "inline-block", color: "#fff", textDecoration: "underline" }}>Try again</a>
+          <Link to={`/admin/sync-metafields${preserveQs}`} style={{ marginTop: 8, display: "inline-block", color: "#fff", textDecoration: "underline" }}>Try again</Link>
         </s-banner>
       )}
       <s-section heading="Definitions and product admin">
@@ -139,42 +141,33 @@ export default function SyncMetafieldsPage() {
         </s-button>
 
         {missing && missing.length > 0 && (
-          <div style={{ marginTop: 16, border: "1px solid #e3e3e3", borderRadius: 8, overflow: "hidden" }}>
-            <div style={{ padding: "10px 14px", background: "#f6f6f7", fontWeight: 600, fontSize: 13 }}>
-              {missing.length} product(s) missing Miles or Title
-            </div>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          <s-box padding="none" borderWidth="base" borderRadius="base" background="surface" style={{ marginTop: 16, overflow: "hidden" }}>
+            <s-box padding="base" background="subdued">
+              <s-text type="strong">{missing.length} product(s) missing Miles or Title</s-text>
+            </s-box>
+            <s-stack direction="block" gap="none">
               {missing.map((p) => (
-                <li
+                <s-stack
                   key={p.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "10px 14px",
-                    borderBottom: "1px solid #f1f1f1",
-                  }}
+                  direction="inline"
+                  gap="base"
+                  style={{ alignItems: "center", padding: "10px 14px", borderBottom: "1px solid #f1f1f1", flexWrap: "wrap" }}
                 >
                   <AdminProductLink shop={shop} legacyResourceId={p.legacyResourceId}>
                     {p.title}
                   </AdminProductLink>
-                  <span style={{ fontSize: 11, color: "#6d7175" }}>
+                  <s-text tone="subdued" style={{ fontSize: 11 }}>
                     {p.missingMiles && "No Miles"}
                     {p.missingMiles && p.missingTitle && " · "}
                     {p.missingTitle && "No Title"}
-                  </span>
-                  <a
-                    href={`https://${shop}/admin/products/${p.legacyResourceId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ fontSize: 12, color: "#2c6ecb" }}
-                  >
+                  </s-text>
+                  <a href={`https://${shop}/admin/products/${p.legacyResourceId}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--p-color-text-link, #2c6ecb)" }}>
                     Edit in Shopify →
                   </a>
-                </li>
+                </s-stack>
               ))}
-            </ul>
-          </div>
+            </s-stack>
+          </s-box>
         )}
         {listRequested && missing && missing.length === 0 && (
           <s-banner tone="success">No vehicles found that are missing Miles or Title.</s-banner>

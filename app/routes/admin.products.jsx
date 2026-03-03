@@ -66,29 +66,27 @@ export default function AdminProductsPage() {
   const preserveQs = searchParams.toString() ? `?${searchParams.toString()}` : "";
 
   return (
-    <s-page heading="Products">
-      <div className="add-product-page admin-products-page" style={{ maxWidth: "1400px" }}>
-        <div className="admin-products-header">
-          <div className="add-product-breadcrumb">
-            <Link to={`/admin${preserveQs}`}>App</Link>
+    <s-page heading="Products" size="large">
+      <s-stack direction="block" gap="base">
+        <s-stack direction="inline" gap="base" style={{ flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+          <s-text tone="subdued">
+            <Link to={`/admin${preserveQs}`} style={{ color: "var(--p-color-text-link, #2c6ecb)", textDecoration: "none" }}>App</Link>
             <span> › Products</span>
-          </div>
-          <div className="admin-products-header-actions">
-            <Link to={`/admin/add-product${preserveQs}`}>
-              <s-button variant="primary">Add product</s-button>
-            </Link>
-          </div>
-        </div>
+          </s-text>
+          <Link to={`/admin/add-product${preserveQs}`}>
+            <s-button variant="primary">Add product</s-button>
+          </Link>
+        </s-stack>
 
-        <div className="add-product-card admin-products-card" style={{ padding: 0, overflow: "hidden" }}>
+        <s-section>
           {error && (
-            <s-banner tone="critical" style={{ margin: "16px" }}>
+            <s-banner tone="critical" slot="before">
               {error}
             </s-banner>
           )}
 
           {!error && (
-            <div className="admin-products-table-wrap">
+            <div className="admin-products-table-wrap" style={{ overflow: "auto" }}>
               <table className="admin-products-table">
                 <thead>
                   <tr>
@@ -171,18 +169,18 @@ export default function AdminProductsPage() {
             <div style={{ padding: "12px 16px", borderTop: "1px solid #e1e3e5" }}>
               <Link
                 to={`/admin/products?${new URLSearchParams({ ...Object.fromEntries(searchParams), after: pageInfo.endCursor }).toString()}`}
-                style={{ color: "#2c6ecb", fontSize: "14px" }}
+                style={{ color: "var(--p-color-text-link, #2c6ecb)", fontSize: "14px" }}
               >
                 Load more
               </Link>
             </div>
           )}
-        </div>
+        </s-section>
 
-        <p className="add-product-hint" style={{ marginTop: "12px" }}>
+        <s-paragraph tone="subdued">
           Click a product name to edit in the app. Use the ↗ icon next to a product to open it in Shopify Admin.
-        </p>
-      </div>
+        </s-paragraph>
+      </s-stack>
     </s-page>
   );
 }

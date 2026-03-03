@@ -510,7 +510,7 @@ export async function listProductsMissingMilesOrTitle(admin) {
         nodes {
           id
           title
-          metafields(namespace: "vin_decoder", first: 20) { key value }
+          metafields(namespace: "vin_decoder", first: 20) { nodes { key value } }
         }
       }
     }
@@ -521,7 +521,7 @@ export async function listProductsMissingMilesOrTitle(admin) {
     const { data } = await runGraphQL(graphql, { query, variables: after ? { after } : {} });
     const nodes = data?.products?.nodes ?? [];
     for (const p of nodes) {
-      const mf = (p.metafields ?? []).reduce((acc, m) => {
+      const mf = (p.metafields?.nodes ?? []).reduce((acc, m) => {
         acc[m.key] = m?.value ?? "";
         return acc;
       }, {});
@@ -643,7 +643,7 @@ export async function getProductForEditor(admin, productIdOrLegacy) {
             inventoryPolicy
           }
         }
-        metafields(namespace: "vin_decoder", first: 20) { namespace key value }
+        metafields(namespace: "vin_decoder", first: 20) { nodes { namespace key value } }
       }
     }
   `;
@@ -652,7 +652,7 @@ export async function getProductForEditor(admin, productIdOrLegacy) {
   if (!p?.id) return null;
 
   const variant = p.variants?.nodes?.[0];
-  const metafields = (p.metafields ?? []).map((m) => ({ namespace: m.namespace, key: m.key, value: m.value ?? "" }));
+  const metafields = (p.metafields?.nodes ?? []).map((m) => ({ namespace: m.namespace, key: m.key, value: m.value ?? "" }));
   return {
     id: p.id,
     title: p.title ?? "",

@@ -365,15 +365,15 @@ export default function AddProduct() {
   };
 
   return (
-    <s-page heading="Add product">
-      <div className="add-product-page">
-        <div className="add-product-breadcrumb">
-          <Link to={`/admin${location?.search ?? ""}`}>App</Link>
+    <s-page heading="Add product" size="base">
+      <s-stack direction="block" gap="base">
+        <s-text tone="subdued">
+          <Link to={`/admin${location?.search ?? ""}`} style={{ color: "var(--p-color-text-link, #2c6ecb)", textDecoration: "none" }}>App</Link>
           <span> › Add product</span>
-        </div>
+        </s-text>
 
         {productId && (
-          <div className="add-product-success-bar">
+          <s-section>
             <s-banner tone="success">
               Product created successfully.
             </s-banner>
@@ -387,65 +387,41 @@ export default function AddProduct() {
                 </ul>
               </s-banner>
             )}
-            <div style={{ display: "flex", gap: "12px", marginTop: "12px", flexWrap: "wrap" }}>
+            <s-stack direction="inline" gap="base" style={{ marginTop: "12px", flexWrap: "wrap" }}>
               {productAdminUrl(shop, productId) && (
-                <a
-                  href={productAdminUrl(shop, productId)}
-                  target="_top"
-                  rel="noopener noreferrer"
-                  style={{ color: "#2c6ecb", fontWeight: 600, fontSize: "14px" }}
-                >
+                <a href={productAdminUrl(shop, productId)} target="_top" rel="noopener noreferrer" style={{ color: "var(--p-color-text-link, #2c6ecb)", fontWeight: 600, fontSize: "14px" }}>
                   Open product in Shopify
                 </a>
               )}
               <s-button type="button" variant="primary" onClick={handleAddAnother}>
                 Add another product
               </s-button>
-            </div>
-          </div>
+            </s-stack>
+          </s-section>
         )}
 
         <form onSubmit={handleSubmit}>
-          <div className="add-product-grid">
-            {/* Left column – main content */}
-            <div>
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="add-product-title">Title</label>
-                <input
-                  id="add-product-title"
-                  type="text"
-                  className="add-product-input"
+          <s-grid className="add-product-grid" style={{ gridTemplateColumns: "1fr 400px", gap: "24px", maxWidth: "1400px" }}>
+            <s-stack direction="block" gap="base">
+              <s-section heading="Title">
+                <s-text-field
+                  label="Title"
                   value={title}
-                  onChange={(e) => setTitle((e.target?.value ?? "").slice(0, 255))}
+                  onInput={(e) => setTitle((e.currentTarget?.value ?? "").slice(0, 255))}
                   placeholder="Short sleeve t-shirt"
                 />
-              </div>
+              </s-section>
 
-              <div className="add-product-card">
-                <label className="add-product-label">Description</label>
-                <div className="add-product-toolbar">
-                  <select className="add-product-toolbar-select" aria-label="Format">
-                    <option>Paragraph</option>
-                  </select>
-                  <button type="button" className="add-product-toolbar-btn" title="Bold" aria-label="Bold">B</button>
-                  <button type="button" className="add-product-toolbar-btn" title="Italic" aria-label="Italic"><em>I</em></button>
-                  <button type="button" className="add-product-toolbar-btn" title="Underline" aria-label="Underline">U</button>
-                  <button type="button" className="add-product-toolbar-btn" title="Text color" aria-label="Color">A</button>
-                  <button type="button" className="add-product-toolbar-btn" title="Link" aria-label="Link">⎋</button>
-                  <button type="button" className="add-product-toolbar-btn" title="Image" aria-label="Image">🖼</button>
-                  <button type="button" className="add-product-toolbar-btn" title="More" aria-label="More">⋯</button>
-                  <button type="button" className="add-product-toolbar-btn" title="Code" aria-label="Code">&lt;/&gt;</button>
-                </div>
-                <textarea
-                  className="add-product-input add-product-textarea"
+              <s-section heading="Description">
+                <s-text-area
+                  label="Description"
                   value={descriptionHtml}
-                  onChange={(e) => setDescriptionHtml(e.target?.value ?? "")}
+                  onInput={(e) => setDescriptionHtml(e.currentTarget?.value ?? "")}
                   placeholder="Describe your product..."
                 />
-              </div>
+              </s-section>
 
-              <div className="add-product-card">
-                <label className="add-product-label">Media</label>
+              <s-section heading="Media">
                 <MediaPicker
                   productId={productId}
                   pendingMedia={pendingMedia}
@@ -453,121 +429,81 @@ export default function AddProduct() {
                   disabled={false}
                 />
                 {productAdminUrl(shop, productId) && (
-                  <p className="add-product-hint" style={{ marginTop: "12px" }}>
-                    <a
-                      href={productAdminUrl(shop, productId)}
-                      target="_top"
-                      rel="noopener noreferrer"
-                      style={{ color: "#2c6ecb", fontWeight: 500 }}
-                    >
-                      Open product in Shopify
-                    </a>
+                  <s-paragraph tone="subdued" style={{ marginTop: "12px" }}>
+                    <a href={productAdminUrl(shop, productId)} target="_top" rel="noopener noreferrer" style={{ color: "var(--p-color-text-link, #2c6ecb)", fontWeight: 500 }}>Open product in Shopify</a>
                     {" "}to manage media there too.
-                  </p>
+                  </s-paragraph>
                 )}
-              </div>
+              </s-section>
 
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="add-product-category">Category</label>
+              <s-section heading="Category">
                 <select
                   id="add-product-category"
                   className="add-product-input"
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
+                  aria-label="Product category"
+                  style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
                 >
                   <option value="">Choose a product category</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>{c.fullName || c.name}</option>
                   ))}
                 </select>
-                <p className="add-product-hint">Determines tax rates and adds metafields to improve search, filters, and cross-channel sales</p>
-              </div>
-            </div>
+                <s-paragraph tone="subdued" style={{ marginTop: 6 }}>Determines tax rates and adds metafields to improve search, filters, and cross-channel sales</s-paragraph>
+              </s-section>
+            </s-stack>
 
-            {/* Right column – sidebar */}
-            <div>
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="add-product-vin">VIN decoder</label>
-                <p className="add-product-hint" style={{ marginBottom: "8px" }}>
-                  Enter a VIN and click Decode to auto-fill title, description, vendor, and tags.
-                </p>
-                <div style={{ display: "flex", gap: "8px", alignItems: "flex-start", flexWrap: "wrap" }}>
-                  <input
-                    id="add-product-vin"
-                    type="text"
-                    className="add-product-input"
+            <s-stack direction="block" gap="base">
+              <s-section heading="VIN decoder">
+                <s-paragraph tone="subdued" style={{ marginBottom: 8 }}>Enter a VIN and click Decode to auto-fill title, description, vendor, and tags.</s-paragraph>
+                <s-stack direction="inline" gap="base">
+                  <s-text-field
+                    label="VIN"
                     value={vin}
-                    onChange={(e) => setVin((e.target?.value ?? "").toUpperCase().slice(0, VIN_LENGTH))}
+                    onInput={(e) => setVin((e.currentTarget?.value ?? "").toUpperCase().slice(0, VIN_LENGTH))}
                     placeholder="e.g. 1HGBH41JXMN109186"
                     maxLength={VIN_LENGTH}
-                    style={{ flex: "1", minWidth: "140px" }}
+                    helpText={`${vin.length}/${VIN_LENGTH} characters`}
                   />
-                  <s-button
-                    type="button"
-                    variant="secondary"
-                    disabled={vin.trim().length < 8 || decodeBusy}
-                    onClick={handleDecode}
-                    {...(decodeBusy ? { loading: true } : {})}
-                  >
+                  <s-button type="button" variant="secondary" disabled={vin.trim().length < 8 || decodeBusy} onClick={handleDecode} {...(decodeBusy ? { loading: true } : {})}>
                     Decode VIN
                   </s-button>
-                </div>
-                <p className="add-product-hint" style={{ marginTop: "6px" }}>{vin.length}/{VIN_LENGTH} characters</p>
-                {decodeError && (
-                  <s-banner tone="critical" style={{ marginTop: "8px" }}>{decodeError}</s-banner>
-                )}
-              </div>
+                </s-stack>
+                {decodeError && <s-banner tone="critical" style={{ marginTop: 8 }}>{decodeError}</s-banner>}
+              </s-section>
 
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="add-product-status">Status</label>
+              <s-section heading="Status">
                 <select
                   id="add-product-status"
                   className="add-product-input"
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
+                  aria-label="Status"
+                  style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
                 >
                   {STATUS_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
-              </div>
+              </s-section>
 
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="add-product-price">Price</label>
-                <input
-                  id="add-product-price"
-                  type="text"
-                  className="add-product-input"
-                  value={price}
-                  onChange={(e) => setPrice(e.target?.value ?? "")}
-                  placeholder="0.00"
-                />
-                <div className="add-product-options-row">
-                  <button type="button" className="add-product-option-item">Compare at ▾</button>
-                  <button type="button" className="add-product-option-item">Unit price ▾</button>
-                  <button type="button" className="add-product-option-item">Charge tax {chargeTax ? "Yes" : "No"} ▾</button>
-                  <button type="button" className="add-product-option-item">Cost per item ▾</button>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "12px" }}>
-                  <div>
-                    <label className="add-product-label" htmlFor="add-product-compare" style={{ fontSize: "13px" }}>Compare at price</label>
-                    <input id="add-product-compare" type="text" className="add-product-input" value={compareAtPrice} onChange={(e) => setCompareAtPrice(e.target?.value ?? "")} placeholder="0.00" />
-                  </div>
-                  <div>
-                    <label className="add-product-label" htmlFor="add-product-cost" style={{ fontSize: "13px" }}>Cost per item</label>
-                    <input id="add-product-cost" type="text" className="add-product-input" value={cost} onChange={(e) => setCost(e.target?.value ?? "")} placeholder="0.00" />
-                  </div>
-                </div>
-              </div>
+              <s-section heading="Pricing">
+                <s-text-field label="Price" value={price} onInput={(e) => setPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
+                <s-stack direction="block" gap="base" style={{ marginTop: 12 }}>
+                  <s-text-field label="Compare at price" value={compareAtPrice} onInput={(e) => setCompareAtPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
+                  <s-text-field label="Cost per item" value={cost} onInput={(e) => setCost(e.currentTarget?.value ?? "")} placeholder="0.00" />
+                </s-stack>
+              </s-section>
 
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="add-product-title-status">Title</label>
+              <s-section heading="Vehicle details">
                 <select
                   id="add-product-title-status"
                   className="add-product-input"
                   value={titleStatus}
                   onChange={(e) => setTitleStatus(e.target.value)}
-                  aria-describedby="add-product-title-status-hint"
+                  aria-label="Title status"
+                  style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
                 >
                   <option value="">Select title status</option>
                   <option value="Clean">Clean</option>
@@ -576,32 +512,22 @@ export default function AddProduct() {
                   <option value="Junk">Junk</option>
                   <option value="Flood">Flood</option>
                 </select>
-                <p id="add-product-title-status-hint" className="add-product-hint">Saved to product metafield (Brand) for filters.</p>
-
-                <label className="add-product-label" htmlFor="add-product-mileage" style={{ marginTop: "12px", display: "block" }}>Miles</label>
-                <input
-                  id="add-product-mileage"
-                  type="number"
-                  min="0"
-                  step="1"
-                  className="add-product-input"
-                  placeholder="e.g. 45000"
+                <s-paragraph tone="subdued" style={{ marginTop: 6 }}>Saved to product metafield (Brand) for filters.</s-paragraph>
+                <s-number-field
+                  label="Miles"
                   value={mileage}
-                  onChange={(e) => setMileage(e.target?.value ?? "")}
-                  aria-describedby="add-product-mileage-hint"
+                  onInput={(e) => setMileage(e.currentTarget?.value ?? "")}
+                  placeholder="e.g. 45000"
+                  min={0}
+                  style={{ marginTop: 12 }}
                 />
-                <p id="add-product-mileage-hint" className="add-product-hint">Odometer reading. Saved to product metafield for filters.</p>
-              </div>
-            </div>
-          </div>
+                <s-paragraph tone="subdued" style={{ marginTop: 6 }}>Odometer reading. Saved to product metafield for filters.</s-paragraph>
+              </s-section>
+            </s-stack>
+          </s-grid>
 
-          <div className="add-product-save-bar">
-            <s-button
-              type="submit"
-              variant="primary"
-              disabled={!title.trim() || isBusy}
-              {...(isBusy ? { loading: true } : {})}
-            >
+          <div className="add-product-save-bar" style={{ marginTop: 24 }}>
+            <s-button type="submit" variant="primary" disabled={!title.trim() || isBusy} {...(isBusy ? { loading: true } : {})}>
               {isBusy ? "Working…" : "Save product"}
             </s-button>
           </div>
@@ -612,7 +538,7 @@ export default function AddProduct() {
             {error}
           </s-banner>
         )}
-      </div>
+      </s-stack>
     </s-page>
   );
 }

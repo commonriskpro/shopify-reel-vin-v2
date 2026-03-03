@@ -191,59 +191,52 @@ export default function ProductEditorPage() {
   if (loadError || !product) {
     return (
       <s-page heading="Product">
-        <div className="add-product-page">
+        <s-stack direction="block" gap="base">
           <s-banner tone="critical">{loadError ?? "Product not found."}</s-banner>
-          <p style={{ marginTop: "16px" }}>
-            <Link to={`/admin/products${preserveQs}`} style={{ color: "#2c6ecb" }}>Back to Products</Link>
-          </p>
-        </div>
+          <Link to={`/admin/products${preserveQs}`} style={{ color: "var(--p-color-text-link, #2c6ecb)" }}>Back to Products</Link>
+        </s-stack>
       </s-page>
     );
   }
 
   return (
-    <s-page heading={title || "Edit product"}>
-      <div className="add-product-page">
-        <div className="add-product-breadcrumb">
-          <Link to={`/admin${preserveQs}`}>App</Link>
+    <s-page heading={title || "Edit product"} size="base">
+      <s-stack direction="block" gap="base">
+        <s-text tone="subdued">
+          <Link to={`/admin${preserveQs}`} style={{ color: "var(--p-color-text-link, #2c6ecb)", textDecoration: "none" }}>App</Link>
           <span> › </span>
-          <Link to={`/admin/products${preserveQs}`}>Products</Link>
+          <Link to={`/admin/products${preserveQs}`} style={{ color: "var(--p-color-text-link, #2c6ecb)", textDecoration: "none" }}>Products</Link>
           <span> › {title || "Edit"}</span>
-        </div>
+        </s-text>
 
         {saveSuccess && (
-          <div className="add-product-success-bar">
+          <s-section>
             <s-banner tone="success">Changes saved.</s-banner>
-          </div>
+          </s-section>
         )}
 
         <form onSubmit={handleSubmit}>
-          <div className="add-product-grid">
-            <div>
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="edit-product-title">Title</label>
-                <input
-                  id="edit-product-title"
-                  type="text"
-                  className="add-product-input"
+          <s-grid className="add-product-grid" style={{ gridTemplateColumns: "1fr 400px", gap: "24px", maxWidth: "1400px" }}>
+            <s-stack direction="block" gap="base">
+              <s-section heading="Title">
+                <s-text-field
+                  label="Title"
                   value={title}
-                  onChange={(e) => setTitle((e.target?.value ?? "").slice(0, 255))}
+                  onInput={(e) => setTitle((e.currentTarget?.value ?? "").slice(0, 255))}
                   placeholder="Product title"
                 />
-              </div>
+              </s-section>
 
-              <div className="add-product-card">
-                <label className="add-product-label">Description</label>
-                <textarea
-                  className="add-product-input add-product-textarea"
+              <s-section heading="Description">
+                <s-text-area
+                  label="Description"
                   value={descriptionHtml}
-                  onChange={(e) => setDescriptionHtml(e.target?.value ?? "")}
+                  onInput={(e) => setDescriptionHtml(e.currentTarget?.value ?? "")}
                   placeholder="Describe your product..."
                 />
-              </div>
+              </s-section>
 
-              <div className="add-product-card">
-                <label className="add-product-label">Media</label>
+              <s-section heading="Media">
                 <MediaPicker
                   productId={productIdGid}
                   pendingMedia={[]}
@@ -251,62 +244,48 @@ export default function ProductEditorPage() {
                   disabled={false}
                 />
                 {productAdminUrl(shop, productIdGid) && (
-                  <p className="add-product-hint" style={{ marginTop: "12px" }}>
-                    <a href={productAdminUrl(shop, productIdGid)} target="_top" rel="noopener noreferrer" style={{ color: "#2c6ecb", fontWeight: 500 }}>
-                      Open in Shopify
-                    </a>
+                  <s-paragraph tone="subdued" style={{ marginTop: "12px" }}>
+                    <a href={productAdminUrl(shop, productIdGid)} target="_top" rel="noopener noreferrer" style={{ color: "var(--p-color-text-link, #2c6ecb)", fontWeight: 500 }}>Open in Shopify</a>
                     {" "}to reorder or replace media.
-                  </p>
+                  </s-paragraph>
                 )}
-              </div>
+              </s-section>
 
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="edit-product-category">Category</label>
+              <s-section heading="Category">
                 <select
                   id="edit-product-category"
                   className="add-product-input"
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
+                  aria-label="Category"
+                  style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
                 >
                   <option value="">Choose a category</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>{c.fullName || c.name}</option>
                   ))}
                 </select>
-              </div>
-            </div>
+              </s-section>
+            </s-stack>
 
-            <div>
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="edit-product-status">Status</label>
-                <select id="edit-product-status" className="add-product-input" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <s-stack direction="block" gap="base">
+              <s-section heading="Status">
+                <select id="edit-product-status" className="add-product-input" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status" style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}>
                   {STATUS_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
-              </div>
+              </s-section>
 
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="edit-product-price">Price</label>
-                <input
-                  id="edit-product-price"
-                  type="text"
-                  className="add-product-input"
-                  value={price}
-                  onChange={(e) => setPrice(e.target?.value ?? "")}
-                  placeholder="0.00"
-                />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "12px" }}>
-                  <div>
-                    <label className="add-product-label" style={{ fontSize: "13px" }}>Compare at price</label>
-                    <input type="text" className="add-product-input" value={compareAtPrice} onChange={(e) => setCompareAtPrice(e.target?.value ?? "")} placeholder="0.00" />
-                  </div>
-                </div>
-              </div>
+              <s-section heading="Pricing">
+                <s-text-field label="Price" value={price} onInput={(e) => setPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
+                <s-stack direction="block" gap="base" style={{ marginTop: 12 }}>
+                  <s-text-field label="Compare at price" value={compareAtPrice} onInput={(e) => setCompareAtPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
+                </s-stack>
+              </s-section>
 
-              <div className="add-product-card">
-                <label className="add-product-label" htmlFor="edit-product-title-status">Title status</label>
-                <select id="edit-product-title-status" className="add-product-input" value={titleStatus} onChange={(e) => setTitleStatus(e.target.value)}>
+              <s-section heading="Vehicle details">
+                <select id="edit-product-title-status" className="add-product-input" value={titleStatus} onChange={(e) => setTitleStatus(e.target.value)} aria-label="Title status" style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}>
                   <option value="">Select</option>
                   <option value="Clean">Clean</option>
                   <option value="Rebuilt">Rebuilt</option>
@@ -314,31 +293,17 @@ export default function ProductEditorPage() {
                   <option value="Junk">Junk</option>
                   <option value="Flood">Flood</option>
                 </select>
-                <label className="add-product-label" htmlFor="edit-product-mileage" style={{ marginTop: "12px", display: "block" }}>Miles</label>
-                <input
-                  id="edit-product-mileage"
-                  type="number"
-                  min="0"
-                  className="add-product-input"
-                  placeholder="e.g. 45000"
-                  value={mileage}
-                  onChange={(e) => setMileage(e.target?.value ?? "")}
-                />
-              </div>
-            </div>
-          </div>
+                <s-number-field label="Miles" value={mileage} onInput={(e) => setMileage(e.currentTarget?.value ?? "")} placeholder="e.g. 45000" min={0} style={{ marginTop: 12 }} />
+              </s-section>
+            </s-stack>
+          </s-grid>
 
-          <div className="add-product-save-bar">
+          <div className="add-product-save-bar" style={{ marginTop: 24 }}>
             <s-button type="submit" variant="primary" disabled={!title.trim() || isBusy} {...(isBusy ? { loading: true } : {})}>
               {isBusy ? "Saving…" : "Save"}
             </s-button>
             {productAdminUrl(shop, productIdGid) && (
-              <a
-                href={productAdminUrl(shop, productIdGid)}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ marginLeft: "12px", color: "#2c6ecb", fontSize: "14px" }}
-              >
+              <a href={productAdminUrl(shop, productIdGid)} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "12px", color: "var(--p-color-text-link, #2c6ecb)", fontSize: "14px" }}>
                 Open in Shopify
               </a>
             )}
@@ -350,7 +315,7 @@ export default function ProductEditorPage() {
             {actionError}
           </s-banner>
         )}
-      </div>
+      </s-stack>
     </s-page>
   );
 }
