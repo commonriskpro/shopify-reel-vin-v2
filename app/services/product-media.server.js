@@ -74,6 +74,59 @@ export async function attachMediaToProduct(admin, { productId, media }) {
 }
 
 /**
+ * Reorder product media using productReorderMedia mutation.
+ * Polls the returned Job until done (or timeout). Requires write_products.
+ * @param {import("@shopify/shopify-api").AdminApiContext} admin
+ * @param {{ productId: string; mediaIds: string[] }} options - ordered array of media GIDs
+ * @returns {Promise<{ ok: boolean; error?: string }>}
+ */
+export async function reorderProductMedia(admin, { productId, mediaIds }) {
+  const graphql = admin?.graphql;
+  if (!graphql) throw new ApiError(500, "Admin GraphQL required");
+  if (!mediaIds?.length) return { ok: true };
+
+  const moves = mediaIds.map((id, newPosition) => ({
+    id,
+    newPosition: String(newPosition),
+  }));
+
+  const { data } = await runGraphQL(graphql, {
+    query: `#graphql
+    mutation productReorderMedia($id: ID!, $moves: [MoveInput!]!) {
+      productReorderMedia(id: $id, moves: $moves) {
+        mediaUserErrors { message code }
+        job { id }
+      }
+    }`,
+    variables: { id: productId, moves },
+  });
+
+  const payload = data?.productReorderMedia;
+  const userErrors = payload?.mediaUserErrors ?? [];
+  if (userErrors.length > 0) {
+    const msg = userErrors.map((e) => e?.message ?? "").filter(Boolean).join("; ") || "Reorder failed";
+    throw new ApiError(400, msg, { code: "USER_ERRORS", details: userErrors });
+  }
+
+  const jobId = payload?.job?.id;
+  if (!jobId) return { ok: true };
+
+  // Poll job until done (max ~5s)
+  const maxAttempts = 10;
+  const intervalMs = 500;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    const { data: jobData } = await runGraphQL(graphql, {
+      query: `#graphql query jobStatus($id: ID!) { job(id: $id) { id done } }`,
+      variables: { id: jobId },
+    });
+    if (jobData?.job?.done) return { ok: true };
+  }
+
+  return { ok: true };
+}
+
+/**
  * @deprecated Use attachMediaToProduct. Kept for compatibility.
  */
 export async function addProductMedia(admin, productId, media) {

@@ -243,12 +243,12 @@ export default function ProductEditorPage() {
                   onPendingMediaChange={() => {}}
                   disabled={false}
                 />
-                {productAdminUrl(shop, productIdGid) && (
-                  <s-paragraph tone="subdued" style={{ marginTop: "12px" }}>
-                    <a href={productAdminUrl(shop, productIdGid)} target="_top" rel="noopener noreferrer" style={{ color: "var(--p-color-text-link, #2c6ecb)", fontWeight: 500 }}>Open in Shopify</a>
-                    {" "}to reorder or replace media.
-                  </s-paragraph>
-                )}
+                <s-paragraph tone="subdued" style={{ marginTop: "12px" }}>
+                  Drag thumbnails to reorder in the app.
+                  {productAdminUrl(shop, productIdGid) && (
+                    <>{" "}<a href={productAdminUrl(shop, productIdGid)} target="_top" rel="noopener noreferrer" style={{ color: "var(--p-color-text-link, #2c6ecb)", fontWeight: 500 }}>Open in Shopify</a> to replace or manage media.</>
+                  )}
+                </s-paragraph>
               </s-section>
 
               <s-section heading="Category">

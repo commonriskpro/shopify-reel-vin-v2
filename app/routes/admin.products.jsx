@@ -66,19 +66,15 @@ export default function AdminProductsPage() {
   const preserveQs = searchParams.toString() ? `?${searchParams.toString()}` : "";
 
   return (
-    <s-page heading="Products" size="large">
+    <s-page heading="Products" size="base">
       <s-stack direction="block" gap="base">
-        <s-stack direction="inline" gap="base" style={{ flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
-          <s-text tone="subdued">
-            <Link to={`/admin${preserveQs}`} style={{ color: "var(--p-color-text-link, #2c6ecb)", textDecoration: "none" }}>App</Link>
-            <span> › Products</span>
-          </s-text>
-          <Link to={`/admin/add-product${preserveQs}`}>
-            <s-button variant="primary">Add product</s-button>
-          </Link>
-        </s-stack>
+        <s-text tone="subdued">
+          <Link to={`/admin${preserveQs}`} style={{ color: "var(--p-color-text-link, #2c6ecb)", textDecoration: "none" }}>App</Link>
+          <span> › Products</span>
+        </s-text>
+      </s-stack>
 
-        <s-section>
+      <s-section>
           {error && (
             <s-banner tone="critical" slot="before">
               {error}
@@ -177,10 +173,14 @@ export default function AdminProductsPage() {
           )}
         </s-section>
 
-        <s-paragraph tone="subdued">
+      <s-section slot="aside" heading="Actions">
+        <Link to={`/admin/add-product${preserveQs}`}>
+          <s-button variant="primary" style={{ width: "100%" }}>Add product</s-button>
+        </Link>
+        <s-paragraph tone="subdued" style={{ marginTop: 12 }}>
           Click a product name to edit in the app. Use the ↗ icon next to a product to open it in Shopify Admin.
         </s-paragraph>
-      </s-stack>
+      </s-section>
     </s-page>
   );
 }

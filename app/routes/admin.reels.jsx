@@ -478,7 +478,7 @@ export default function ReelsPage() {
 
   if (!configured) {
     return (
-      <s-page heading="Shoppable Reels" inlineSize="large">
+      <s-page heading="Shoppable Reels" size="base">
         <s-banner tone="warning">
           Set <code>REELS_API_URL</code> and <code>REELS_ADMIN_SECRET</code> in your app environment (e.g. .env or
           Shopify CLI) and redeploy. REELS_API_URL should be your Vercel API base (e.g.
@@ -490,26 +490,7 @@ export default function ReelsPage() {
   }
 
   return (
-    <s-page heading="Shoppable Reels" inlineSize="large">
-      <s-section heading="Store homepage">
-        {homepageToggleFetcher.data && !homepageToggleFetcher.data.ok && (
-          <s-banner tone="critical" style={{ marginBottom: 12 }}>
-            {homepageToggleFetcher.data.error || "Could not update setting."}
-          </s-banner>
-        )}
-        <s-stack direction="inline" gap="base" style={{ alignItems: "center" }}>
-          <s-checkbox
-            checked={!!showReelsOnHomepage}
-            onChange={() => { if (!toggleBusy) handleHomepageToggle(); }}
-            disabled={toggleBusy}
-            aria-label="Show reels on store homepage"
-          />
-          <s-text type="strong">Show reels on store homepage</s-text>
-        </s-stack>
-        <s-paragraph tone="subdued" style={{ marginTop: 8 }}>
-          When on, the Shoppable Reels section appears on your store’s homepage (Shopify home). When off, it is hidden there.
-        </s-paragraph>
-      </s-section>
+    <s-page heading="Shoppable Reels" size="base">
       <s-section heading="Link products to reels">
         <div className="reels-ui-shell" aria-live="polite" aria-busy={syncBusy}>
           <div className="reels-connections">
@@ -587,6 +568,26 @@ export default function ReelsPage() {
             )}
           </div>
         </div>
+      </s-section>
+
+      <s-section slot="aside" heading="Store homepage">
+        {homepageToggleFetcher.data && !homepageToggleFetcher.data.ok && (
+          <s-banner tone="critical" style={{ marginBottom: 12 }}>
+            {homepageToggleFetcher.data.error || "Could not update setting."}
+          </s-banner>
+        )}
+        <s-stack direction="inline" gap="base" style={{ alignItems: "center" }}>
+          <s-checkbox
+            checked={!!showReelsOnHomepage}
+            onChange={() => { if (!toggleBusy) handleHomepageToggle(); }}
+            disabled={toggleBusy}
+            aria-label="Show reels on store homepage"
+          />
+          <s-text type="strong">Show reels on store homepage</s-text>
+        </s-stack>
+        <s-paragraph tone="subdued" style={{ marginTop: 8 }}>
+          When on, the Shoppable Reels section appears on your store's homepage. When off, it is hidden there.
+        </s-paragraph>
       </s-section>
     </s-page>
   );

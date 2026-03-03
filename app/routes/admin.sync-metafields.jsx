@@ -104,7 +104,7 @@ export default function SyncMetafieldsPage() {
   const { synced, missing, shop, listRequested, error } = data;
 
   return (
-    <s-page heading="Sync metafields">
+    <s-page heading="Sync metafields" size="base">
       {error && (
         <s-banner tone="critical" style={{ marginBottom: 16 }}>
           {error}
@@ -172,6 +172,15 @@ export default function SyncMetafieldsPage() {
         {listRequested && missing && missing.length === 0 && (
           <s-banner tone="success">No vehicles found that are missing Miles or Title.</s-banner>
         )}
+      </s-section>
+
+      <s-section slot="aside" heading="About">
+        <s-paragraph tone="subdued">
+          <strong>Title</strong> and <strong>Miles</strong> are product metafields used by your theme in the vehicle specs block. Definitions are synced when you open the app.
+        </s-paragraph>
+        <s-paragraph tone="subdued" style={{ marginTop: 12 }}>
+          To create or update metafield definitions for collection filters, use <Link to={`/admin/setup${preserveQs}`} style={{ color: "var(--p-color-text-link, #2c6ecb)" }}>Filter Setup</Link>.
+        </s-paragraph>
       </s-section>
     </s-page>
   );

@@ -121,11 +121,12 @@ export function MediaPicker({
   onMediaChange,
   disabled,
 }) {
-  // Four independent fetchers — one per operation class
-  const productMediaFetcher = useFetcher(); // GET product-media
-  const filesFetcher = useFetcher();         // GET files list
-  const stagedFetcher = useFetcher();        // POST staged-uploads
-  const addMediaFetcher = useFetcher();      // POST add-product-media
+  // Five fetchers: product-media, files list, staged-uploads, add-product-media, reorder-product-media
+  const productMediaFetcher = useFetcher();
+  const filesFetcher = useFetcher();
+  const stagedFetcher = useFetcher();
+  const addMediaFetcher = useFetcher();
+  const reorderFetcher = useFetcher();
 
   const fileInputRef = useRef(null);
   const dropzoneRef = useRef(null);
@@ -173,6 +174,7 @@ export function MediaPicker({
       : null;
   const currentMedia = hasProductId ? savedMedia ?? [] : pendingMedia;
   const isPendingMode = !hasProductId;
+  const savedMediaWithIds = hasProductId && Array.isArray(currentMedia) && currentMedia.length > 1 && currentMedia.every((m) => m?.id);
   const mediaLoadIsNotFound = mediaData?.error?.code === "NOT_FOUND";
   const uploading = uploadPhase !== "idle";
 
@@ -408,6 +410,15 @@ export function MediaPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addMediaFetcher.state, addMediaFetcher.data]);
 
+  // After reorder succeeds, refresh product media list
+  useEffect(() => {
+    if (reorderFetcher.state !== "idle" || !reorderFetcher.data?.ok || !productId) return;
+    productMediaFetcher.load(
+      `/admin/media?intent=product-media&productId=${encodeURIComponent(productId)}`
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reorderFetcher.state, reorderFetcher.data]);
+
   // Sync modal open state
   useEffect(() => {
     if (selectModalOpen && modalRef.current?.showOverlay) {
@@ -518,7 +529,10 @@ export function MediaPicker({
     onPendingMediaChange?.(pendingMedia.filter((_, i) => i !== index));
   };
 
-  const canReorder = isPendingMode && onPendingMediaChange && pendingMedia.length > 1;
+  const canReorderPending = isPendingMode && onPendingMediaChange && pendingMedia.length > 1;
+  const reorderBusy = reorderFetcher.state !== "idle";
+  const canReorder =
+    (canReorderPending || (savedMediaWithIds && productId)) && !reorderBusy;
   const MEDIA_REORDER_TYPE = "application/x-shopify-media-index";
 
   const handleMediaDragStart = (e, index) => {
@@ -547,17 +561,41 @@ export function MediaPicker({
   const handleMediaDrop = (e, dropIndex) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!canReorder || dragMediaIndex == null || dragMediaIndex === dropIndex) {
+    if (dragMediaIndex == null || dragMediaIndex === dropIndex) {
       setDragMediaIndex(null);
       setDropTargetIndex(null);
       return;
     }
-    const next = [...pendingMedia];
-    const [removed] = next.splice(dragMediaIndex, 1);
-    next.splice(dropIndex, 0, removed);
-    onPendingMediaChange?.(next);
-    setDragMediaIndex(null);
-    setDropTargetIndex(null);
+    if (canReorderPending) {
+      const next = [...pendingMedia];
+      const [removed] = next.splice(dragMediaIndex, 1);
+      next.splice(dropIndex, 0, removed);
+      onPendingMediaChange?.(next);
+      setDragMediaIndex(null);
+      setDropTargetIndex(null);
+      return;
+    }
+    if (savedMediaWithIds && productId) {
+      const next = [...currentMedia];
+      const [removed] = next.splice(dragMediaIndex, 1);
+      next.splice(dropIndex, 0, removed);
+      const mediaIds = next.map((m) => m.id).filter(Boolean);
+      if (mediaIds.length === 0) {
+        setDragMediaIndex(null);
+        setDropTargetIndex(null);
+        return;
+      }
+      reorderFetcher.submit(
+        {
+          intent: "reorder-product-media",
+          productId,
+          mediaIds,
+        },
+        { method: "POST", encType: "application/json", action: "/admin/media" }
+      );
+      setDragMediaIndex(null);
+      setDropTargetIndex(null);
+    }
   };
 
   const handlePickFile = (file) => {
@@ -633,6 +671,9 @@ export function MediaPicker({
         )}
 
         {/* Existing media thumbnails */}
+        {reorderBusy && (
+          <p className="media-picker-hint" style={{ marginBottom: 8 }}>Reordering…</p>
+        )}
         {currentMedia.length > 0 && (
           <div className="media-picker-thumbnails">
             {currentMedia.map((m, index) => (
@@ -737,12 +778,14 @@ export function MediaPicker({
           <p className="media-picker-hint">Create the product first to attach media.</p>
         )}
 
-        {(uploadError || mediaLoadError) && (
+        {(uploadError || mediaLoadError || (reorderFetcher.data && !reorderFetcher.data.ok && errorMsg(reorderFetcher.data))) && (
           <s-banner tone="critical" style={{ marginTop: "12px" }}>
             <span>
               {mediaLoadIsNotFound
                 ? "Product or media not found."
-                : uploadError || mediaLoadError}
+                : reorderFetcher.data && !reorderFetcher.data.ok
+                  ? errorMsg(reorderFetcher.data)
+                  : uploadError || mediaLoadError}
             </span>
             {(uploadRequestId || mediaLoadRequestId) && (
               <span style={{ display: "block", marginTop: "6px", fontSize: "12px", opacity: 0.9 }}>
