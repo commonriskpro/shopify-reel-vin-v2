@@ -119,7 +119,16 @@ export const action = async ({ request }) => {
         );
       }
       reelsReadCache.delete(`reels:${session?.shop || "unknown"}`);
-      return Response.json({ ok: true, synced: true, inserted: data?.inserted ?? 0, reels: data?.reels ?? [] });
+      let reelsToReturn = data?.reels ?? [];
+      const reelsApi = await fetchJsonWithPolicy(`${base}/api/reels`, {
+        headers: { Accept: "application/json", "Cache-Control": "no-cache", Pragma: "no-cache" },
+        retries: 1,
+        timeoutMs: 5000,
+      });
+      if (reelsApi.ok && Array.isArray(reelsApi.data?.reels)) {
+        reelsToReturn = reelsApi.data.reels;
+      }
+      return Response.json({ ok: true, synced: true, inserted: data?.inserted ?? 0, reels: reelsToReturn });
     } catch (err) {
       logServerError("admin.reels.sync", err, { shop: session?.shop });
       return Response.json({ ok: false, error: `Sync request failed: ${err.message}` }, { status: 502 });
@@ -447,6 +456,14 @@ export default function ReelsPage() {
     }, 250);
   }, [revalidator]);
 
+  // After import, show new reels instantly from sync response, then revalidate loader
+  const reelsToShow =
+    syncFetcher.state === "idle" &&
+    syncFetcher.data?.ok &&
+    Array.isArray(syncFetcher.data.reels)
+      ? syncFetcher.data.reels
+      : reels;
+
   useEffect(() => {
     if (homepageToggleFetcher.state === "idle" && homepageToggleFetcher.data?.ok) {
       setOptimisticShow(homepageToggleFetcher.data.show_reels_on_homepage);
@@ -459,9 +476,9 @@ export default function ReelsPage() {
     if (syncFetcher.state === "idle" && syncFetcher.data?.ok && syncFetcher.data?.inserted !== undefined) {
       const n = syncFetcher.data.inserted ?? 0;
       shopify?.toast?.show?.(n > 0 ? `Imported ${n} new reel${n !== 1 ? "s" : ""}` : "Sync complete");
-      scheduleRevalidate();
+      revalidator.revalidate();
     }
-  }, [syncFetcher.state, syncFetcher.data, shopify, scheduleRevalidate]);
+  }, [syncFetcher.state, syncFetcher.data, shopify, revalidator]);
 
   useEffect(() => () => {
     if (revalidateTimerRef.current) clearTimeout(revalidateTimerRef.current);
@@ -478,7 +495,7 @@ export default function ReelsPage() {
 
   if (!configured) {
     return (
-      <s-page heading="Shoppable Reels" size="base">
+      <s-page heading="Shoppable Reels" inlineSize="large">
         <s-banner tone="warning">
           Set <code>REELS_API_URL</code> and <code>REELS_ADMIN_SECRET</code> in your app environment (e.g. .env or
           Shopify CLI) and redeploy. REELS_API_URL should be your Vercel API base (e.g.
@@ -490,7 +507,26 @@ export default function ReelsPage() {
   }
 
   return (
-    <s-page heading="Shoppable Reels" size="base">
+    <s-page heading="Shoppable Reels" inlineSize="large">
+      <s-section heading="Store homepage">
+        {homepageToggleFetcher.data && !homepageToggleFetcher.data.ok && (
+          <s-banner tone="critical" style={{ marginBottom: 12 }}>
+            {homepageToggleFetcher.data.error || "Could not update setting."}
+          </s-banner>
+        )}
+        <s-stack direction="inline" gap="base" style={{ alignItems: "center" }}>
+          <s-checkbox
+            checked={!!showReelsOnHomepage}
+            onChange={() => { if (!toggleBusy) handleHomepageToggle(); }}
+            disabled={toggleBusy}
+            aria-label="Show reels on store homepage"
+          />
+          <s-text type="strong">Show reels on store homepage</s-text>
+        </s-stack>
+        <s-paragraph tone="subdued" style={{ marginTop: 8 }}>
+          When on, the Shoppable Reels section appears on your store's homepage (Shopify home). When off, it is hidden there.
+        </s-paragraph>
+      </s-section>
       <s-section heading="Link products to reels">
         <div className="reels-ui-shell" aria-live="polite" aria-busy={syncBusy}>
           <div className="reels-connections">
@@ -499,7 +535,7 @@ export default function ReelsPage() {
                 <span className="reels-platform-icon reels-platform-icon--instagram" aria-hidden="true">IG</span>
                 <div className="reels-connection-meta">
                   <span className="reels-connection-title">Instagram</span>
-                  <span className="reels-connection-subtitle">{reels?.length ? "@connected" : "Connected (no reels yet)"}</span>
+                  <span className="reels-connection-subtitle">{reelsToShow?.length ? "@connected" : "Connected (no reels yet)"}</span>
                 </div>
               </div>
               <syncFetcher.Form method="post">
@@ -538,7 +574,7 @@ export default function ReelsPage() {
                 Could not load reels: {error}
               </s-banner>
             )}
-            {reels && reels.length === 0 ? (
+            {reelsToShow && reelsToShow.length === 0 ? (
               <div className="reels-empty-state">
                 <s-text type="strong" style={{ display: "block", marginBottom: 8 }}>No reels yet</s-text>
                 <s-paragraph tone="subdued">
@@ -556,7 +592,7 @@ export default function ReelsPage() {
               </div>
             ) : (
               <div className="reels-grid">
-              {reels?.map((reel) => (
+              {reelsToShow?.map((reel) => (
                 <ReelCard
                   key={reel.id}
                   reel={reel}
@@ -568,26 +604,6 @@ export default function ReelsPage() {
             )}
           </div>
         </div>
-      </s-section>
-
-      <s-section slot="aside" heading="Store homepage">
-        {homepageToggleFetcher.data && !homepageToggleFetcher.data.ok && (
-          <s-banner tone="critical" style={{ marginBottom: 12 }}>
-            {homepageToggleFetcher.data.error || "Could not update setting."}
-          </s-banner>
-        )}
-        <s-stack direction="inline" gap="base" style={{ alignItems: "center" }}>
-          <s-checkbox
-            checked={!!showReelsOnHomepage}
-            onChange={() => { if (!toggleBusy) handleHomepageToggle(); }}
-            disabled={toggleBusy}
-            aria-label="Show reels on store homepage"
-          />
-          <s-text type="strong">Show reels on store homepage</s-text>
-        </s-stack>
-        <s-paragraph tone="subdued" style={{ marginTop: 8 }}>
-          When on, the Shoppable Reels section appears on your store's homepage. When off, it is hidden there.
-        </s-paragraph>
       </s-section>
     </s-page>
   );

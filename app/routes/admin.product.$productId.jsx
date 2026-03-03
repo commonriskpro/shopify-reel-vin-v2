@@ -215,107 +215,97 @@ export default function ProductEditorPage() {
           </s-section>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <s-grid className="add-product-grid" style={{ gridTemplateColumns: "1fr 400px", gap: "24px", maxWidth: "1400px" }}>
-            <s-stack direction="block" gap="base">
-              <s-section heading="Title">
-                <s-text-field
-                  label="Title"
-                  value={title}
-                  onInput={(e) => setTitle((e.currentTarget?.value ?? "").slice(0, 255))}
-                  placeholder="Product title"
-                />
-              </s-section>
-
-              <s-section heading="Description">
-                <s-text-area
-                  label="Description"
-                  value={descriptionHtml}
-                  onInput={(e) => setDescriptionHtml(e.currentTarget?.value ?? "")}
-                  placeholder="Describe your product..."
-                />
-              </s-section>
-
-              <s-section heading="Media">
-                <MediaPicker
-                  productId={productIdGid}
-                  pendingMedia={[]}
-                  onPendingMediaChange={() => {}}
-                  disabled={false}
-                />
-                <s-paragraph tone="subdued" style={{ marginTop: "12px" }}>
-                  Drag thumbnails to reorder in the app.
-                  {productAdminUrl(shop, productIdGid) && (
-                    <>{" "}<a href={productAdminUrl(shop, productIdGid)} target="_top" rel="noopener noreferrer" style={{ color: "var(--p-color-text-link, #2c6ecb)", fontWeight: 500 }}>Open in Shopify</a> to replace or manage media.</>
-                  )}
-                </s-paragraph>
-              </s-section>
-
-              <s-section heading="Category">
-                <select
-                  id="edit-product-category"
-                  className="add-product-input"
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  aria-label="Category"
-                  style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
-                >
-                  <option value="">Choose a category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.fullName || c.name}</option>
-                  ))}
-                </select>
-              </s-section>
-            </s-stack>
-
-            <s-stack direction="block" gap="base">
-              <s-section heading="Status">
-                <select id="edit-product-status" className="add-product-input" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status" style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}>
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </s-section>
-
-              <s-section heading="Pricing">
-                <s-text-field label="Price" value={price} onInput={(e) => setPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
-                <s-stack direction="block" gap="base" style={{ marginTop: 12 }}>
-                  <s-text-field label="Compare at price" value={compareAtPrice} onInput={(e) => setCompareAtPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
-                </s-stack>
-              </s-section>
-
-              <s-section heading="Vehicle details">
-                <select id="edit-product-title-status" className="add-product-input" value={titleStatus} onChange={(e) => setTitleStatus(e.target.value)} aria-label="Title status" style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}>
-                  <option value="">Select</option>
-                  <option value="Clean">Clean</option>
-                  <option value="Rebuilt">Rebuilt</option>
-                  <option value="Salvage">Salvage</option>
-                  <option value="Junk">Junk</option>
-                  <option value="Flood">Flood</option>
-                </select>
-                <s-number-field label="Miles" value={mileage} onInput={(e) => setMileage(e.currentTarget?.value ?? "")} placeholder="e.g. 45000" min={0} style={{ marginTop: 12 }} />
-              </s-section>
-            </s-stack>
-          </s-grid>
-
-          <div className="add-product-save-bar" style={{ marginTop: 24 }}>
-            <s-button type="submit" variant="primary" disabled={!title.trim() || isBusy} {...(isBusy ? { loading: true } : {})}>
-              {isBusy ? "Saving…" : "Save"}
-            </s-button>
-            {productAdminUrl(shop, productIdGid) && (
-              <a href={productAdminUrl(shop, productIdGid)} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "12px", color: "var(--p-color-text-link, #2c6ecb)", fontSize: "14px" }}>
-                Open in Shopify
-              </a>
-            )}
-          </div>
-        </form>
-
         {actionError && (
-          <s-banner tone="critical" style={{ marginTop: "1rem" }}>
-            {actionError}
-          </s-banner>
+          <s-banner tone="critical">{actionError}</s-banner>
         )}
       </s-stack>
+
+      <form onSubmit={handleSubmit}>
+        <s-section heading="Product details">
+          <s-stack direction="block" gap="base">
+            <s-text-field
+              label="Title"
+              value={title}
+              onInput={(e) => setTitle((e.currentTarget?.value ?? "").slice(0, 255))}
+              placeholder="Product title"
+            />
+            <s-text-area
+              label="Description"
+              value={descriptionHtml}
+              onInput={(e) => setDescriptionHtml(e.currentTarget?.value ?? "")}
+              placeholder="Describe your product..."
+            />
+            <div>
+              <s-text type="strong" style={{ display: "block", marginBottom: 8 }}>Media</s-text>
+              <MediaPicker
+                productId={productIdGid}
+                pendingMedia={[]}
+                onPendingMediaChange={() => {}}
+                disabled={false}
+              />
+              <s-paragraph tone="subdued" style={{ marginTop: "12px" }}>
+                Drag thumbnails to reorder in the app.
+                {productAdminUrl(shop, productIdGid) && (
+                  <>{" "}<a href={productAdminUrl(shop, productIdGid)} target="_top" rel="noopener noreferrer" style={{ color: "var(--p-color-text-link, #2c6ecb)", fontWeight: 500 }}>Open in Shopify</a> to replace or manage media.</>
+                )}
+              </s-paragraph>
+            </div>
+            <div>
+              <label htmlFor="edit-product-category" style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Category</label>
+              <select
+                id="edit-product-category"
+                className="add-product-input"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                aria-label="Category"
+                style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
+              >
+                <option value="">Choose a category</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.fullName || c.name}</option>
+                ))}
+              </select>
+            </div>
+          </s-stack>
+        </s-section>
+
+        <s-section slot="aside" heading="Status & pricing">
+          <s-stack direction="block" gap="base">
+            <div>
+              <label htmlFor="edit-product-status" style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Status</label>
+              <select id="edit-product-status" className="add-product-input" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status" style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}>
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <s-text-field label="Price" value={price} onInput={(e) => setPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
+            <s-text-field label="Compare at price" value={compareAtPrice} onInput={(e) => setCompareAtPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
+            <div>
+              <s-text type="strong" style={{ display: "block", marginBottom: 8 }}>Vehicle details</s-text>
+              <select id="edit-product-title-status" className="add-product-input" value={titleStatus} onChange={(e) => setTitleStatus(e.target.value)} aria-label="Title status" style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}>
+                <option value="">Select</option>
+                <option value="Clean">Clean</option>
+                <option value="Rebuilt">Rebuilt</option>
+                <option value="Salvage">Salvage</option>
+                <option value="Junk">Junk</option>
+                <option value="Flood">Flood</option>
+              </select>
+              <s-number-field label="Miles" value={mileage} onInput={(e) => setMileage(e.currentTarget?.value ?? "")} placeholder="e.g. 45000" min={0} style={{ marginTop: 12 }} />
+            </div>
+            <div className="add-product-save-bar" style={{ marginTop: 8 }}>
+              <s-button type="submit" variant="primary" disabled={!title.trim() || isBusy} {...(isBusy ? { loading: true } : {})}>
+                {isBusy ? "Saving…" : "Save"}
+              </s-button>
+              {productAdminUrl(shop, productIdGid) && (
+                <a href={productAdminUrl(shop, productIdGid)} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "12px", color: "var(--p-color-text-link, #2c6ecb)", fontSize: "14px" }}>
+                  Open in Shopify
+                </a>
+              )}
+            </div>
+          </s-stack>
+        </s-section>
+      </form>
     </s-page>
   );
 }

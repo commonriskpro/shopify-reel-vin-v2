@@ -401,136 +401,132 @@ export default function AddProduct() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <s-grid className="add-product-grid" style={{ gridTemplateColumns: "1fr 400px", gap: "24px", maxWidth: "1400px" }}>
-            <s-stack direction="block" gap="base">
-              <s-section heading="Title">
+          <s-stack direction="block" gap="base" style={{ maxWidth: "720px" }}>
+            <s-section heading="Title">
+              <s-text-field
+                label="Title"
+                value={title}
+                onInput={(e) => setTitle((e.currentTarget?.value ?? "").slice(0, 255))}
+                placeholder="Short sleeve t-shirt"
+              />
+            </s-section>
+
+            <s-section heading="Description">
+              <s-text-area
+                label="Description"
+                value={descriptionHtml}
+                onInput={(e) => setDescriptionHtml(e.currentTarget?.value ?? "")}
+                placeholder="Describe your product..."
+              />
+            </s-section>
+
+            <s-section heading="Media">
+              <MediaPicker
+                productId={productId}
+                pendingMedia={pendingMedia}
+                onPendingMediaChange={setPendingMedia}
+                disabled={false}
+              />
+              {productAdminUrl(shop, productId) && (
+                <s-paragraph tone="subdued" style={{ marginTop: "12px" }}>
+                  <a href={productAdminUrl(shop, productId)} target="_top" rel="noopener noreferrer" style={{ color: "var(--p-color-text-link, #2c6ecb)", fontWeight: 500 }}>Open product in Shopify</a>
+                  {" "}to manage media there too.
+                </s-paragraph>
+              )}
+            </s-section>
+
+            <s-section heading="Category">
+              <select
+                id="add-product-category"
+                className="add-product-input"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                aria-label="Product category"
+                style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
+              >
+                <option value="">Choose a product category</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.fullName || c.name}</option>
+                ))}
+              </select>
+              <s-paragraph tone="subdued" style={{ marginTop: 6 }}>Determines tax rates and adds metafields to improve search, filters, and cross-channel sales</s-paragraph>
+            </s-section>
+
+            <s-section heading="VIN decoder">
+              <s-paragraph tone="subdued" style={{ marginBottom: 8 }}>Enter a VIN and click Decode to auto-fill title, description, vendor, and tags.</s-paragraph>
+              <s-stack direction="inline" gap="base">
                 <s-text-field
-                  label="Title"
-                  value={title}
-                  onInput={(e) => setTitle((e.currentTarget?.value ?? "").slice(0, 255))}
-                  placeholder="Short sleeve t-shirt"
+                  label="VIN"
+                  value={vin}
+                  onInput={(e) => setVin((e.currentTarget?.value ?? "").toUpperCase().slice(0, VIN_LENGTH))}
+                  placeholder="e.g. 1HGBH41JXMN109186"
+                  maxLength={VIN_LENGTH}
+                  helpText={`${vin.length}/${VIN_LENGTH} characters`}
                 />
-              </s-section>
+                <s-button type="button" variant="secondary" disabled={vin.trim().length < 8 || decodeBusy} onClick={handleDecode} {...(decodeBusy ? { loading: true } : {})}>
+                  Decode VIN
+                </s-button>
+              </s-stack>
+              {decodeError && <s-banner tone="critical" style={{ marginTop: 8 }}>{decodeError}</s-banner>}
+            </s-section>
 
-              <s-section heading="Description">
-                <s-text-area
-                  label="Description"
-                  value={descriptionHtml}
-                  onInput={(e) => setDescriptionHtml(e.currentTarget?.value ?? "")}
-                  placeholder="Describe your product..."
-                />
-              </s-section>
+            <s-section heading="Status">
+              <select
+                id="add-product-status"
+                className="add-product-input"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                aria-label="Status"
+                style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
+              >
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </s-section>
 
-              <s-section heading="Media">
-                <MediaPicker
-                  productId={productId}
-                  pendingMedia={pendingMedia}
-                  onPendingMediaChange={setPendingMedia}
-                  disabled={false}
-                />
-                {productAdminUrl(shop, productId) && (
-                  <s-paragraph tone="subdued" style={{ marginTop: "12px" }}>
-                    <a href={productAdminUrl(shop, productId)} target="_top" rel="noopener noreferrer" style={{ color: "var(--p-color-text-link, #2c6ecb)", fontWeight: 500 }}>Open product in Shopify</a>
-                    {" "}to manage media there too.
-                  </s-paragraph>
-                )}
-              </s-section>
+            <s-section heading="Pricing">
+              <s-text-field label="Price" value={price} onInput={(e) => setPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
+              <s-stack direction="block" gap="base" style={{ marginTop: 12 }}>
+                <s-text-field label="Compare at price" value={compareAtPrice} onInput={(e) => setCompareAtPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
+                <s-text-field label="Cost per item" value={cost} onInput={(e) => setCost(e.currentTarget?.value ?? "")} placeholder="0.00" />
+              </s-stack>
+            </s-section>
 
-              <s-section heading="Category">
-                <select
-                  id="add-product-category"
-                  className="add-product-input"
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  aria-label="Product category"
-                  style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
-                >
-                  <option value="">Choose a product category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.fullName || c.name}</option>
-                  ))}
-                </select>
-                <s-paragraph tone="subdued" style={{ marginTop: 6 }}>Determines tax rates and adds metafields to improve search, filters, and cross-channel sales</s-paragraph>
-              </s-section>
-            </s-stack>
+            <s-section heading="Vehicle details">
+              <select
+                id="add-product-title-status"
+                className="add-product-input"
+                value={titleStatus}
+                onChange={(e) => setTitleStatus(e.target.value)}
+                aria-label="Title status"
+                style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
+              >
+                <option value="">Select title status</option>
+                <option value="Clean">Clean</option>
+                <option value="Rebuilt">Rebuilt</option>
+                <option value="Salvage">Salvage</option>
+                <option value="Junk">Junk</option>
+                <option value="Flood">Flood</option>
+              </select>
+              <s-paragraph tone="subdued" style={{ marginTop: 6 }}>Saved to product metafield (Brand) for filters.</s-paragraph>
+              <s-number-field
+                label="Miles"
+                value={mileage}
+                onInput={(e) => setMileage(e.currentTarget?.value ?? "")}
+                placeholder="e.g. 45000"
+                min={0}
+                style={{ marginTop: 12 }}
+              />
+              <s-paragraph tone="subdued" style={{ marginTop: 6 }}>Odometer reading. Saved to product metafield for filters.</s-paragraph>
+            </s-section>
 
-            <s-stack direction="block" gap="base">
-              <s-section heading="VIN decoder">
-                <s-paragraph tone="subdued" style={{ marginBottom: 8 }}>Enter a VIN and click Decode to auto-fill title, description, vendor, and tags.</s-paragraph>
-                <s-stack direction="inline" gap="base">
-                  <s-text-field
-                    label="VIN"
-                    value={vin}
-                    onInput={(e) => setVin((e.currentTarget?.value ?? "").toUpperCase().slice(0, VIN_LENGTH))}
-                    placeholder="e.g. 1HGBH41JXMN109186"
-                    maxLength={VIN_LENGTH}
-                    helpText={`${vin.length}/${VIN_LENGTH} characters`}
-                  />
-                  <s-button type="button" variant="secondary" disabled={vin.trim().length < 8 || decodeBusy} onClick={handleDecode} {...(decodeBusy ? { loading: true } : {})}>
-                    Decode VIN
-                  </s-button>
-                </s-stack>
-                {decodeError && <s-banner tone="critical" style={{ marginTop: 8 }}>{decodeError}</s-banner>}
-              </s-section>
-
-              <s-section heading="Status">
-                <select
-                  id="add-product-status"
-                  className="add-product-input"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  aria-label="Status"
-                  style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
-                >
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </s-section>
-
-              <s-section heading="Pricing">
-                <s-text-field label="Price" value={price} onInput={(e) => setPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
-                <s-stack direction="block" gap="base" style={{ marginTop: 12 }}>
-                  <s-text-field label="Compare at price" value={compareAtPrice} onInput={(e) => setCompareAtPrice(e.currentTarget?.value ?? "")} placeholder="0.00" />
-                  <s-text-field label="Cost per item" value={cost} onInput={(e) => setCost(e.currentTarget?.value ?? "")} placeholder="0.00" />
-                </s-stack>
-              </s-section>
-
-              <s-section heading="Vehicle details">
-                <select
-                  id="add-product-title-status"
-                  className="add-product-input"
-                  value={titleStatus}
-                  onChange={(e) => setTitleStatus(e.target.value)}
-                  aria-label="Title status"
-                  style={{ width: "100%", minHeight: "36px", padding: "8px 12px", fontSize: 14, border: "1px solid #c8ccd0", borderRadius: 6 }}
-                >
-                  <option value="">Select title status</option>
-                  <option value="Clean">Clean</option>
-                  <option value="Rebuilt">Rebuilt</option>
-                  <option value="Salvage">Salvage</option>
-                  <option value="Junk">Junk</option>
-                  <option value="Flood">Flood</option>
-                </select>
-                <s-paragraph tone="subdued" style={{ marginTop: 6 }}>Saved to product metafield (Brand) for filters.</s-paragraph>
-                <s-number-field
-                  label="Miles"
-                  value={mileage}
-                  onInput={(e) => setMileage(e.currentTarget?.value ?? "")}
-                  placeholder="e.g. 45000"
-                  min={0}
-                  style={{ marginTop: 12 }}
-                />
-                <s-paragraph tone="subdued" style={{ marginTop: 6 }}>Odometer reading. Saved to product metafield for filters.</s-paragraph>
-              </s-section>
-            </s-stack>
-          </s-grid>
-
-          <div className="add-product-save-bar" style={{ marginTop: 24 }}>
-            <s-button type="submit" variant="primary" disabled={!title.trim() || isBusy} {...(isBusy ? { loading: true } : {})}>
-              {isBusy ? "Working…" : "Save product"}
-            </s-button>
-          </div>
+            <div className="add-product-save-bar" style={{ marginTop: 24 }}>
+              <s-button type="submit" variant="primary" disabled={!title.trim() || isBusy} {...(isBusy ? { loading: true } : {})}>
+                {isBusy ? "Working…" : "Save product"}
+              </s-button>
+            </div>
+          </s-stack>
         </form>
 
         {error && (
