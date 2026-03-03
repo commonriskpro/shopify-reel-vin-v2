@@ -437,6 +437,27 @@ function ReelCard({ reel, shopify, onActionSuccess }) {
 }
 
 export default function ReelsPage() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  if (!mounted) {
+    return (
+      <s-page heading="Shoppable Reels" inlineSize="large">
+        <s-section>
+          <s-stack direction="block" gap="base" style={{ padding: "24px 0" }}>
+            <div style={{ width: 200, height: 24, background: "#e1e3e5", borderRadius: 4 }} />
+            <div style={{ width: "100%", height: 120, background: "#f1f2f4", borderRadius: 8 }} />
+            <div style={{ width: "100%", height: 80, background: "#f1f2f4", borderRadius: 8 }} />
+          </s-stack>
+        </s-section>
+      </s-page>
+    );
+  }
+  return <ReelsPageContent />;
+}
+
+function ReelsPageContent() {
   const { reels, configured, error, showReelsOnHomepage: initialShowReels, reelsApiUrl } = useLoaderData() ?? {};
   const revalidator = useRevalidator();
   const revalidateTimerRef = useRef(null);
